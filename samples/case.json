@@ -1,0 +1,147 @@
+{
+  "templateId": "068xx000000caseXYZ",
+  "outputFileName": "Case_Report_{{Case.CaseNumber}}.pdf",
+  "outputFormat": "PDF",
+  "locale": "en-GB",
+  "timezone": "Europe/London",
+  "options": {
+    "storeMergedDocx": false,
+    "returnDocxToBrowser": false
+  },
+  "parents": {
+    "AccountId": "001xx000000abcdXXX",
+    "OpportunityId": null,
+    "CaseId": "500xx000000caseXYZ"
+  },
+  "data": {
+    "Account": {
+      "Id": "001xx000000abcdXXX",
+      "Name": "TechStart Solutions Ltd",
+      "BillingCity": "Bristol",
+      "Phone": "+44 117 496 0000",
+      "Industry": "Technology",
+      "Type": "Customer - Direct"
+    },
+    "Contact": {
+      "Id": "003xx000000contXYZ",
+      "Name": "Michael Brown",
+      "Title": "IT Manager",
+      "Email": "michael.brown@techstart.co.uk",
+      "Phone": "+44 117 496 0123",
+      "Department": "Information Technology"
+    },
+    "Case": {
+      "Id": "500xx000000caseXYZ",
+      "CaseNumber": "00012345",
+      "Subject": "Unable to access reporting dashboard after latest update",
+      "Description": "Users in the Finance department are unable to access the reporting dashboard. Error message: 'Session expired. Please log in again.' This started occurring immediately after the platform update on 1 Nov 2025.",
+      "Status": "In Progress",
+      "Priority": "High",
+      "Origin": "Web",
+      "Type": "Technical Issue",
+      "Reason": "Installation/Setup",
+      "ProductAffected": "Enterprise Platform - Reporting Module",
+      "VersionAffected": "v2.5.1",
+      "IsCritical": true,
+      "IsEscalated": false,
+      "CreatedDate": "2025-11-02T09:15:00.000Z",
+      "CreatedDate__formatted": "2 Nov 2025, 09:15",
+      "ClosedDate": null,
+      "ClosedDate__formatted": null,
+      "LastModifiedDate": "2025-11-05T10:30:00.000Z",
+      "LastModifiedDate__formatted": "5 Nov 2025, 10:30",
+      "Owner": {
+        "Name": "Emma Davis",
+        "Email": "emma.davis@example.com",
+        "Phone": "+44 20 7946 0125",
+        "Title": "Senior Support Engineer"
+      },
+      "Comments": [
+        {
+          "Id": "00axx000000commAAA",
+          "CreatedDate__formatted": "2 Nov 2025, 10:30",
+          "CreatedBy": "Emma Davis",
+          "Body": "Thank you for reporting this issue. I've reviewed the logs and can see session tokens are expiring prematurely for users accessing the reporting module. This appears to be related to the v2.5.1 update. Escalating to Engineering for investigation.",
+          "IsPublished": true
+        },
+        {
+          "Id": "00axx000000commBBB",
+          "CreatedDate__formatted": "3 Nov 2025, 14:15",
+          "CreatedBy": "Engineering Team",
+          "Body": "Root cause identified: The session timeout configuration was inadvertently changed during the deployment. We're preparing a hotfix (v2.5.2) to restore the correct timeout value. Expected deployment: 4 Nov 2025.",
+          "IsPublished": true
+        },
+        {
+          "Id": "00axx000000commCCC",
+          "CreatedDate__formatted": "4 Nov 2025, 16:45",
+          "CreatedBy": "Emma Davis",
+          "Body": "Hotfix v2.5.2 has been deployed to production. Please test the reporting dashboard and confirm the issue is resolved. Monitoring system logs for any further occurrences.",
+          "IsPublished": true
+        },
+        {
+          "Id": "00axx000000commDDD",
+          "CreatedDate__formatted": "5 Nov 2025, 09:00",
+          "CreatedBy": "Michael Brown",
+          "Body": "Confirmed - Finance team can now access the reporting dashboard without issues. Thank you for the quick turnaround!",
+          "IsPublished": true
+        }
+      ],
+      "ResolutionSummary": "Session timeout configuration was corrected via hotfix v2.5.2. Monitoring for 48 hours before closing.",
+      "NextSteps": "Monitor system logs and user feedback for 48 hours. If no further issues reported, case will be closed.",
+      "TimeToFirstResponse__formatted": "1 hour 15 minutes",
+      "TimeToResolution__formatted": "55 hours",
+      "SLAStatus": "Met",
+      "SLADeadline__formatted": "4 Nov 2025, 17:15"
+    },
+    "RelatedArticles": [
+      {
+        "Title": "KB-001234: Session Management Best Practices",
+        "URL": "https://support.example.com/kb/001234",
+        "Summary": "Guidelines for configuring session timeouts and security policies"
+      },
+      {
+        "Title": "KB-005678: Reporting Dashboard Troubleshooting",
+        "URL": "https://support.example.com/kb/005678",
+        "Summary": "Common issues and solutions for the reporting dashboard module"
+      }
+    ],
+    "Attachments": [
+      {
+        "Name": "error_screenshot.png",
+        "Description": "Screenshot of error message",
+        "ContentType": "image/png",
+        "Size__formatted": "125 KB",
+        "UploadedDate__formatted": "2 Nov 2025, 09:20"
+      },
+      {
+        "Name": "session_logs.txt",
+        "Description": "Session logs from affected users",
+        "ContentType": "text/plain",
+        "Size__formatted": "48 KB",
+        "UploadedDate__formatted": "2 Nov 2025, 11:45"
+      }
+    ],
+    "SatisfactionSurvey": {
+      "Rating": 5,
+      "Rating__formatted": "5/5 stars",
+      "Feedback": "Excellent support! The team identified and resolved the issue quickly. Very impressed with the communication throughout the process.",
+      "SubmittedDate__formatted": "5 Nov 2025, 10:15"
+    },
+    "CaseMetrics": {
+      "ResponseTime__formatted": "1 hour 15 minutes",
+      "ResolutionTime__formatted": "55 hours",
+      "ReopenCount": 0,
+      "BacklogTime__formatted": "0 hours",
+      "AgentWorkTime__formatted": "4 hours 30 minutes"
+    },
+    "GeneratedBy": {
+      "Name": "Emma Davis",
+      "Title": "Senior Support Engineer",
+      "Email": "emma.davis@example.com",
+      "Phone": "+44 20 7946 0125"
+    },
+    "GeneratedDate__formatted": "5 Nov 2025",
+    "ReportFooter": "This case report is confidential and intended for internal use only."
+  },
+  "requestHash": "sha256:c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0"
+}

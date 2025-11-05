@@ -1,0 +1,80 @@
+{
+  "templateId": "068xx000000abcdXXX",
+  "outputFileName": "Account_Summary_{{Account.Name}}.pdf",
+  "outputFormat": "PDF",
+  "locale": "en-GB",
+  "timezone": "Europe/London",
+  "options": {
+    "storeMergedDocx": false,
+    "returnDocxToBrowser": false
+  },
+  "parents": {
+    "AccountId": "001xx000000abcdXXX",
+    "OpportunityId": null,
+    "CaseId": null
+  },
+  "data": {
+    "Account": {
+      "Id": "001xx000000abcdXXX",
+      "Name": "Acme Corporation Ltd",
+      "BillingStreet": "123 High Street",
+      "BillingCity": "London",
+      "BillingPostalCode": "SW1A 1AA",
+      "BillingCountry": "United Kingdom",
+      "Phone": "+44 20 7946 0958",
+      "Website": "https://www.acme.co.uk",
+      "Industry": "Technology",
+      "NumberOfEmployees": 250,
+      "NumberOfEmployees__formatted": "250",
+      "AnnualRevenue": 12000000,
+      "AnnualRevenue__formatted": "£12,000,000",
+      "Type": "Customer - Direct",
+      "Rating": "Hot",
+      "Owner": {
+        "Name": "John Smith",
+        "Email": "john.smith@example.com",
+        "Phone": "+44 20 7946 0123"
+      },
+      "CreatedDate": "2023-01-15T09:30:00.000Z",
+      "CreatedDate__formatted": "15 Jan 2023",
+      "LastModifiedDate": "2025-11-04T14:22:00.000Z",
+      "LastModifiedDate__formatted": "4 Nov 2025",
+      "Description": "Leading technology provider in the UK market with focus on enterprise solutions.",
+      "IsPartner": false,
+      "ParentAccount": null,
+      "Contacts": [
+        {
+          "Name": "Jane Doe",
+          "Title": "Chief Technology Officer",
+          "Email": "jane.doe@acme.co.uk",
+          "Phone": "+44 20 7946 0959",
+          "Department": "Technology"
+        },
+        {
+          "Name": "Robert Johnson",
+          "Title": "Finance Director",
+          "Email": "robert.johnson@acme.co.uk",
+          "Phone": "+44 20 7946 0960",
+          "Department": "Finance"
+        }
+      ],
+      "RecentOpportunities": [
+        {
+          "Name": "FY25 Enterprise License",
+          "StageName": "Closed Won",
+          "Amount__formatted": "£450,000",
+          "CloseDate__formatted": "15 Sep 2025"
+        },
+        {
+          "Name": "Professional Services - Q4",
+          "StageName": "Negotiation",
+          "Amount__formatted": "£125,000",
+          "CloseDate__formatted": "31 Dec 2025"
+        }
+      ]
+    },
+    "GeneratedDate__formatted": "5 Nov 2025",
+    "ReportFooter": "This document was generated automatically from Salesforce data. For questions, contact your account manager."
+  },
+  "requestHash": "sha256:7f3e9a2b8c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f"
+}

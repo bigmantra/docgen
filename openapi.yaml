@@ -1,0 +1,417 @@
+openapi: 3.0.3
+info:
+  title: Salesforce Document Generation API
+  description: |
+    Node.js service for generating PDF and DOCX documents from Salesforce data using docx-templates.
+
+    **Key Features:**
+    - Interactive generation (LWC → Apex → Node)
+    - Batch generation (Apex Batch → Node poller)
+    - Template caching by ContentVersionId
+    - Idempotency via RequestHash
+    - LibreOffice-based DOCX→PDF conversion
+
+    **Authentication:**
+    - Inbound (Salesforce → Node): Azure AD OAuth2 client credentials
+    - Outbound (Node → Salesforce): JWT Bearer Flow with Integration User
+
+    See ADRs in /docs/adr/ for architectural decisions.
+  version: 1.0.0
+  contact:
+    name: Docgen Development Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://{environment}.azurecontainerapps.io
+    description: Azure Container Apps endpoint
+    variables:
+      environment:
+        default: docgen-prod
+        description: Environment name (docgen-dev, docgen-staging, docgen-prod)
+
+tags:
+  - name: health
+    description: Health and readiness endpoints
+  - name: document-generation
+    description: Document generation endpoints
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Returns 200 if the service is running. Used by Kubernetes/ACA for liveness checks.
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+              example:
+                status: ok
+
+  /readyz:
+    get:
+      summary: Readiness probe
+      description: |
+        Returns 200 if the service is ready to handle requests (all dependencies healthy).
+        Returns 503 if dependencies (Salesforce, Key Vault) are unhealthy.
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                  checks:
+                    type: object
+                    properties:
+                      salesforce:
+                        type: boolean
+                      keyVault:
+                        type: boolean
+              example:
+                ready: true
+                checks:
+                  salesforce: true
+                  keyVault: true
+        '503':
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                  checks:
+                    type: object
+              example:
+                ready: false
+                checks:
+                  salesforce: false
+                  keyVault: true
+
+  /generate:
+    post:
+      summary: Generate a document from a Salesforce template
+      description: |
+        **Interactive document generation** endpoint. Accepts a JSON envelope with template ID,
+        output format, locale/timezone, and data object. Returns a download URL for the generated file.
+
+        **Flow:**
+        1. Validate AAD JWT (client credentials from Salesforce Named Credential)
+        2. Check idempotency via RequestHash (if provided)
+        3. Fetch template from Salesforce Files (by ContentVersionId)
+        4. Merge template with data using docx-templates
+        5. Convert DOCX→PDF via LibreOffice (if outputFormat=PDF)
+        6. Upload result to Salesforce Files
+        7. Link file to parent records (Account/Opportunity/Case)
+        8. Return download URL and ContentVersionId
+
+        **Data Contract:**
+        - Apex is responsible for building the JSON envelope
+        - All display values (currency, date, number) are **preformatted** by Apex with `__formatted` suffix
+        - Field paths follow **Salesforce API naming** (e.g., `Account.Name`, `Opportunity.TotalAmount__formatted`)
+        - RequestHash is computed by Apex: `sha256(templateId | outputFormat | sha256(canonical_json(data)))`
+
+        **Idempotency:**
+        If a RequestHash is provided and a prior request with the same hash succeeded, the existing
+        ContentVersionId is returned immediately without reprocessing.
+
+        **Concurrency:**
+        Each container instance supports up to 8 concurrent LibreOffice conversions. Additional requests
+        are queued.
+      tags:
+        - document-generation
+      security:
+        - oauth2: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocgenRequest'
+            examples:
+              minimal:
+                summary: Minimal valid request
+                value:
+                  templateId: '068xx000000abcdXXX'
+                  outputFileName: 'Account_Summary.pdf'
+                  outputFormat: PDF
+                  locale: en-GB
+                  timezone: Europe/London
+                  options:
+                    storeMergedDocx: false
+                    returnDocxToBrowser: false
+                  data:
+                    Account:
+                      Name: Acme Ltd
+                      BillingCity: London
+              full:
+                summary: Full request with all fields
+                value:
+                  templateId: '068xx000000abcdXXX'
+                  outputFileName: 'Opportunity_{{Opportunity.Name}}.pdf'
+                  outputFormat: PDF
+                  locale: en-GB
+                  timezone: Europe/London
+                  options:
+                    storeMergedDocx: true
+                    returnDocxToBrowser: false
+                  parents:
+                    AccountId: '001xx000000abcdXXX'
+                    OpportunityId: '006xx000000xyzABC'
+                    CaseId: null
+                  data:
+                    Account:
+                      Name: Acme Ltd
+                      AnnualRevenue__formatted: '£1,200,000'
+                    Opportunity:
+                      Name: FY25 Renewal
+                      CloseDate__formatted: '31 Oct 2025'
+                      TotalAmount__formatted: '£250,000'
+                      LineItems:
+                        - Name: SKU-A
+                          Qty: 10
+                          UnitPrice__formatted: '£1,000'
+                          LineTotal__formatted: '£10,000'
+                  requestHash: 'sha256:a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6'
+      responses:
+        '200':
+          description: Document generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocgenResponse'
+              example:
+                downloadUrl: 'https://example.my.salesforce.com/sfc/servlet.shepherd/version/download/068xx000000abcdXXX'
+                contentVersionId: '068xx000000abcdXXX'
+                correlationId: '12345678-1234-4567-89ab-123456789012'
+        '202':
+          description: Request accepted for processing (async/batch mode)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  correlationId:
+                    type: string
+                    format: uuid
+                  message:
+                    type: string
+              example:
+                correlationId: '12345678-1234-4567-89ab-123456789012'
+                message: 'Document generation request accepted'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 400
+                error: Bad Request
+                message: "body must have required property 'templateId'"
+        '401':
+          description: Missing or invalid AAD JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 401
+                error: Unauthorized
+                message: 'Missing or invalid Bearer token'
+        '403':
+          description: Token valid but insufficient permissions or wrong audience
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 403
+                error: Forbidden
+                message: 'Token audience does not match expected client ID'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 500
+                error: Internal Server Error
+                message: 'LibreOffice conversion failed'
+
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: Azure AD OAuth2 client credentials flow (Salesforce Named Credential → Node)
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token
+          scopes: {}
+
+  schemas:
+    DocgenRequest:
+      type: object
+      required:
+        - templateId
+        - outputFileName
+        - outputFormat
+        - locale
+        - timezone
+        - options
+        - data
+      properties:
+        templateId:
+          type: string
+          description: |
+            Salesforce ContentVersionId (18 chars) of the DOCX template.
+            Template is cached immutably by this ID.
+          example: '068xx000000abcdXXX'
+        outputFileName:
+          type: string
+          description: |
+            Desired output file name. May contain template placeholders (e.g., `{{Opportunity.Name}}`).
+            These are resolved during merge.
+          example: 'Opportunity_{{Opportunity.Name}}.pdf'
+        outputFormat:
+          type: string
+          enum:
+            - PDF
+            - DOCX
+          description: |
+            Output format. PDF requires LibreOffice conversion. DOCX returns the merged template as-is.
+        locale:
+          type: string
+          description: |
+            Locale for formatting (used by Apex to preformat values). Examples: `en-GB`, `en-US`, `de-DE`.
+          example: en-GB
+        timezone:
+          type: string
+          description: |
+            Timezone for date/time formatting (used by Apex). Examples: `Europe/London`, `America/New_York`.
+          example: Europe/London
+        options:
+          type: object
+          required:
+            - storeMergedDocx
+            - returnDocxToBrowser
+          properties:
+            storeMergedDocx:
+              type: boolean
+              description: |
+                Whether to store the merged DOCX alongside the PDF in Salesforce Files.
+                Useful for debugging or archiving the intermediate step.
+            returnDocxToBrowser:
+              type: boolean
+              description: |
+                (Interactive mode only) If true, return the DOCX download URL instead of PDF.
+                Ignored in batch mode.
+        data:
+          type: object
+          additionalProperties: true
+          description: |
+            Template data object with Salesforce field paths. Structure is flexible but should match
+            template placeholders. Use `__formatted` suffix for display values (precomputed by Apex).
+
+            **Examples:**
+            - `Account.Name` → raw field
+            - `Account.AnnualRevenue__formatted` → currency formatted by Apex
+            - `Opportunity.LineItems` → array for loops
+
+            **Field Path Convention:** Salesforce API naming (no underscores except for `__formatted`).
+          example:
+            Account:
+              Name: Acme Ltd
+              BillingCity: London
+              AnnualRevenue__formatted: '£1,200,000'
+        parents:
+          type: object
+          properties:
+            AccountId:
+              type: string
+              nullable: true
+              description: Salesforce Account ID (18 chars). If present, file will be linked via ContentDocumentLink.
+            OpportunityId:
+              type: string
+              nullable: true
+              description: Salesforce Opportunity ID (18 chars). If present, file will be linked.
+            CaseId:
+              type: string
+              nullable: true
+              description: Salesforce Case ID (18 chars). If present, file will be linked.
+          description: |
+            Parent record IDs for linking the generated file. All non-null IDs will receive a ContentDocumentLink
+            with `ShareType=V`, `Visibility=AllUsers`.
+        requestHash:
+          type: string
+          description: |
+            **Idempotency key** computed by Apex:
+            `sha256(templateId | outputFormat | sha256(canonical_json(data)))`
+
+            If provided, Node checks for an existing `Generated_Document__c` record with this hash.
+            If found and status=SUCCEEDED, returns the prior ContentVersionId without reprocessing.
+          example: 'sha256:a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6'
+
+    DocgenResponse:
+      type: object
+      required:
+        - downloadUrl
+        - contentVersionId
+        - correlationId
+      properties:
+        downloadUrl:
+          type: string
+          format: uri
+          description: |
+            Salesforce ContentVersion download URL. Opens the generated PDF/DOCX in the browser.
+            Format: `https://<SF_DOMAIN>/sfc/servlet.shepherd/version/download/<ContentVersionId>`
+          example: 'https://example.my.salesforce.com/sfc/servlet.shepherd/version/download/068xx000000abcdXXX'
+        contentVersionId:
+          type: string
+          description: |
+            Salesforce ContentVersionId (18 chars) of the uploaded file. Can be used for subsequent operations.
+          example: '068xx000000abcdXXX'
+        correlationId:
+          type: string
+          format: uuid
+          description: |
+            Correlation ID for tracking this request across logs, traces, and metrics.
+            Extracted from `x-correlation-id` header or generated as UUIDv4.
+          example: '12345678-1234-4567-89ab-123456789012'
+
+    Error:
+      type: object
+      required:
+        - statusCode
+        - error
+        - message
+      properties:
+        statusCode:
+          type: integer
+          description: HTTP status code
+          example: 400
+        error:
+          type: string
+          description: Error name/type
+          example: Bad Request
+        message:
+          type: string
+          description: Human-readable error message
+          example: "body must have required property 'templateId'"
