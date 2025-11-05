@@ -36,18 +36,34 @@
 
 **Definition of Done**: Tests green locally; CI workflow runs tests on PR.
 **Timebox**: ≤2–3 days
+**Status**: ✅ **COMPLETED** (2025-11-05)
+
 **Progress checklist**
 
-* [ ] Node/TS skeleton runs locally
-* [ ] Jest + ts-jest + Supertest + Nock installed
-* [ ] Apex package compiles under sfdx
-* [ ] CI pipeline runs tests on PR
-  **PR checklist**
-* [ ] Tests cover external behaviour and edge cases
-* [ ] Security & secrets handled per policy
-* [ ] Observability (logs/metrics/traces) added where relevant
-* [ ] Docs updated (README/Runbook/ADR)
-* [ ] Reviewer notes: risks, roll-back, toggles
+* [x] Node/TS skeleton runs locally
+* [x] Jest + ts-jest + Supertest + Nock installed
+* [x] Apex package compiles under sfdx
+* [x] CI pipeline runs tests on PR
+
+**PR checklist**
+* [x] Tests cover external behaviour and edge cases (5/5 tests passing)
+* [x] Security & secrets handled per policy (environment-based config)
+* [x] Observability (logs/metrics/traces) added where relevant (correlation IDs, JSON logging)
+* [x] Docs updated (README/Runbook/ADR) (README + 4 ADRs created)
+* [x] Reviewer notes: risks, roll-back, toggles (documented in ADRs)
+
+**Completion Summary**:
+- **Commit**: `46db789` - T-01: Repository, Runtime & Test Harness Bootstrap
+- **Files Created**: 26 files (2,918 lines)
+- **Test Results**: 5/5 tests passing ✓
+- **Build Status**: TypeScript compiles successfully ✓
+- **Key Deliverables**:
+  - TypeScript/Fastify service with health endpoints
+  - Jest test infrastructure (5 passing tests)
+  - Salesforce Apex scaffold (Placeholder.cls + PlaceholderTest.cls)
+  - Documentation (README + 4 ADRs)
+  - GitHub Actions CI/CD workflow
+  - ESLint, Prettier, and strict TypeScript configuration
 
 ---
 
