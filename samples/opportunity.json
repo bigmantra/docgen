@@ -1,0 +1,177 @@
+{
+  "templateId": "068xx000000xyzABC",
+  "outputFileName": "Quote_{{Opportunity.Name}}_{{Opportunity.CloseDate__formatted}}.pdf",
+  "outputFormat": "PDF",
+  "locale": "en-GB",
+  "timezone": "Europe/London",
+  "options": {
+    "storeMergedDocx": true,
+    "returnDocxToBrowser": false
+  },
+  "parents": {
+    "AccountId": "001xx000000abcdXXX",
+    "OpportunityId": "006xx000000xyzABC",
+    "CaseId": null
+  },
+  "data": {
+    "Account": {
+      "Id": "001xx000000abcdXXX",
+      "Name": "Global Industries plc",
+      "BillingStreet": "456 Park Lane",
+      "BillingCity": "Manchester",
+      "BillingPostalCode": "M1 1AE",
+      "BillingCountry": "United Kingdom",
+      "Phone": "+44 161 496 0000",
+      "Industry": "Manufacturing",
+      "AnnualRevenue__formatted": "£85,000,000"
+    },
+    "Opportunity": {
+      "Id": "006xx000000xyzABC",
+      "Name": "FY25 Platform Renewal & Expansion",
+      "StageName": "Proposal/Price Quote",
+      "Probability": 75,
+      "Probability__formatted": "75%",
+      "Amount": 450000,
+      "Amount__formatted": "£450,000",
+      "CloseDate": "2025-12-31",
+      "CloseDate__formatted": "31 Dec 2025",
+      "Type": "Existing Customer - Renewal",
+      "LeadSource": "Customer Event",
+      "Description": "Annual platform renewal with additional 50 user licenses and premium support upgrade.",
+      "NextStep": "Await legal review and CFO sign-off",
+      "Owner": {
+        "Name": "Sarah Williams",
+        "Email": "sarah.williams@example.com",
+        "Phone": "+44 20 7946 0124",
+        "Title": "Senior Account Executive"
+      },
+      "CreatedDate__formatted": "15 Aug 2025",
+      "LastModifiedDate__formatted": "4 Nov 2025",
+      "LineItems": [
+        {
+          "Id": "01txx000000lineAAA",
+          "ProductCode": "PLAT-ENT-001",
+          "Name": "Enterprise Platform License",
+          "Description": "Annual subscription for enterprise platform (200 users)",
+          "Quantity": 200,
+          "Quantity__formatted": "200",
+          "UnitPrice": 1200,
+          "UnitPrice__formatted": "£1,200",
+          "Discount": 10,
+          "Discount__formatted": "10%",
+          "ListPrice__formatted": "£1,333",
+          "TotalPrice": 240000,
+          "TotalPrice__formatted": "£240,000",
+          "ServiceDate__formatted": "1 Jan 2026"
+        },
+        {
+          "Id": "01txx000000lineBBB",
+          "ProductCode": "PLAT-ENT-002",
+          "Name": "Additional User Licenses",
+          "Description": "50 additional user licenses for expansion",
+          "Quantity": 50,
+          "Quantity__formatted": "50",
+          "UnitPrice": 1200,
+          "UnitPrice__formatted": "£1,200",
+          "Discount": 10,
+          "Discount__formatted": "10%",
+          "ListPrice__formatted": "£1,333",
+          "TotalPrice": 60000,
+          "TotalPrice__formatted": "£60,000",
+          "ServiceDate__formatted": "1 Jan 2026"
+        },
+        {
+          "Id": "01txx000000lineCCC",
+          "ProductCode": "SUP-PREM-001",
+          "Name": "Premium Support",
+          "Description": "24/7 premium support with 2-hour SLA and dedicated CSM",
+          "Quantity": 1,
+          "Quantity__formatted": "1",
+          "UnitPrice": 50000,
+          "UnitPrice__formatted": "£50,000",
+          "Discount": 0,
+          "Discount__formatted": "0%",
+          "ListPrice__formatted": "£50,000",
+          "TotalPrice": 50000,
+          "TotalPrice__formatted": "£50,000",
+          "ServiceDate__formatted": "1 Jan 2026"
+        },
+        {
+          "Id": "01txx000000lineDDD",
+          "ProductCode": "ONBOARD-001",
+          "Name": "Onboarding & Training Services",
+          "Description": "3-day onboarding workshop for new users",
+          "Quantity": 3,
+          "Quantity__formatted": "3",
+          "UnitPrice": 5000,
+          "UnitPrice__formatted": "£5,000",
+          "Discount": 0,
+          "Discount__formatted": "0%",
+          "ListPrice__formatted": "£5,000",
+          "TotalPrice": 15000,
+          "TotalPrice__formatted": "£15,000",
+          "ServiceDate__formatted": "15 Jan 2026"
+        },
+        {
+          "Id": "01txx000000lineEEE",
+          "ProductCode": "IMPL-CUST-001",
+          "Name": "Custom Integration Development",
+          "Description": "Custom API integration with legacy ERP system",
+          "Quantity": 1,
+          "Quantity__formatted": "1",
+          "UnitPrice": 85000,
+          "UnitPrice__formatted": "£85,000",
+          "Discount": 0,
+          "Discount__formatted": "0%",
+          "ListPrice__formatted": "£85,000",
+          "TotalPrice": 85000,
+          "TotalPrice__formatted": "£85,000",
+          "ServiceDate__formatted": "1 Feb 2026"
+        }
+      ],
+      "Subtotal": 450000,
+      "Subtotal__formatted": "£450,000",
+      "Tax": 90000,
+      "Tax__formatted": "£90,000 (20% VAT)",
+      "TotalAmount": 540000,
+      "TotalAmount__formatted": "£540,000",
+      "DiscountAmount": 30000,
+      "DiscountAmount__formatted": "£30,000",
+      "NetAmount": 450000,
+      "NetAmount__formatted": "£450,000"
+    },
+    "Quote": {
+      "QuoteNumber": "Q-2025-11-0042",
+      "ExpirationDate__formatted": "31 Dec 2025",
+      "Status": "Presented",
+      "PaymentTerms": "Net 30",
+      "DeliveryTerms": "Electronic delivery within 48 hours of payment",
+      "ValidityPeriod": "This quotation is valid for 60 days from the date of issue.",
+      "Notes": [
+        "All prices are in GBP and exclude VAT unless stated otherwise.",
+        "Payment terms: Net 30 days from invoice date.",
+        "Annual licenses renew automatically unless cancelled 90 days before renewal.",
+        "Custom development hours are billed at £850/day for any scope changes."
+      ]
+    },
+    "Company": {
+      "Name": "Example Software Ltd",
+      "Address": "789 Tech Park, Cambridge, CB1 1XX, United Kingdom",
+      "Phone": "+44 1223 123456",
+      "Email": "sales@examplesoftware.com",
+      "Website": "https://www.examplesoftware.com",
+      "CompanyNumber": "12345678",
+      "VATNumber": "GB123456789",
+      "Logo__base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    },
+    "GeneratedBy": {
+      "Name": "Sarah Williams",
+      "Title": "Senior Account Executive",
+      "Email": "sarah.williams@example.com",
+      "Phone": "+44 20 7946 0124"
+    },
+    "GeneratedDate__formatted": "5 Nov 2025",
+    "FooterText": "Thank you for your business. We look forward to partnering with you."
+  },
+  "requestHash": "sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+}

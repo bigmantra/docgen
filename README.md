@@ -124,8 +124,83 @@ npm run test:watch
 npm run test:coverage
 ```
 
+## API Endpoints
+
+### Health & Readiness
+
+- **GET /healthz**: Liveness probe (always returns 200)
+- **GET /readyz**: Readiness probe (returns 200 when dependencies healthy, 503 otherwise)
+
+### Document Generation
+
+#### POST /generate
+
+Generate a PDF or DOCX document from a Salesforce template.
+
+**Authentication**: Azure AD OAuth2 Bearer token (client credentials from Salesforce Named Credential)
+
+**Request Body**:
+```json
+{
+  "templateId": "068xx000000abcdXXX",
+  "outputFileName": "Account_Summary_{{Account.Name}}.pdf",
+  "outputFormat": "PDF",
+  "locale": "en-GB",
+  "timezone": "Europe/London",
+  "options": {
+    "storeMergedDocx": false,
+    "returnDocxToBrowser": false
+  },
+  "parents": {
+    "AccountId": "001xx000000abcdXXX",
+    "OpportunityId": null,
+    "CaseId": null
+  },
+  "data": {
+    "Account": {
+      "Name": "Acme Ltd",
+      "AnnualRevenue__formatted": "£1,200,000"
+    }
+  },
+  "requestHash": "sha256:..."
+}
+```
+
+**Success Response** (200):
+```json
+{
+  "downloadUrl": "https://example.my.salesforce.com/sfc/servlet.shepherd/version/download/068xx...",
+  "contentVersionId": "068xx000000abcdXXX",
+  "correlationId": "12345678-1234-4567-89ab-123456789012"
+}
+```
+
+**Accepted Response** (202) - Async processing:
+```json
+{
+  "correlationId": "12345678-1234-4567-89ab-123456789012",
+  "message": "Document generation request accepted"
+}
+```
+
+**Validation Error** (400):
+```json
+{
+  "statusCode": 400,
+  "error": "Bad Request",
+  "message": "body must have required property 'templateId'"
+}
+```
+
+**See Also**:
+- [OpenAPI Specification](./openapi.yaml) - Complete API documentation
+- [Field Path Conventions](./docs/field-path-conventions.md) - Template data structure guide
+- [Sample Payloads](./samples/) - Example requests for Account, Opportunity, and Case
+
 ## Documentation
 
+- [OpenAPI Specification](./openapi.yaml)
+- [Field Path Conventions](./docs/field-path-conventions.md)
 - [Architecture Decision Records (ADRs)](./docs/adr/)
 - [Development Context](./development-context.md)
 - [Development Tasks](./development-tasks.md)

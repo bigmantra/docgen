@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { healthRoutes } from './routes/health';
+import { generateRoutes } from './routes/generate';
 import { loadConfig } from './config';
 
 /**
@@ -26,6 +27,7 @@ export async function build(): Promise<FastifyInstance> {
 
   // Register routes
   await app.register(healthRoutes);
+  await app.register(generateRoutes);
 
   return app;
 }
