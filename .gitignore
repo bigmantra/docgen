@@ -6,6 +6,9 @@ yarn.lock
 dist/
 build/
 *.tsbuildinfo
+test/**/*.js
+test/**/*.d.ts
+test/**/*.map
 
 # Test coverage
 coverage/

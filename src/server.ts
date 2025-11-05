@@ -58,6 +58,7 @@ if (require.main === module) {
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
+    // eslint-disable-next-line no-console
     console.log(`\nReceived ${signal}, shutting down gracefully...`);
     process.exit(0);
   };
