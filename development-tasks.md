@@ -260,17 +260,35 @@ sequenceDiagram
 
 **Definition of Done**: Schema validates; examples parse; OpenAPI builds.
 **Timebox**: ≤2–3 days
+**Status**: ✅ **COMPLETED** (2025-11-05)
+
 **Progress checklist**
 
-* [ ] Schema added & tested
-* [ ] Examples for Account/Opportunity/Case
-* [ ] OpenAPI fragment committed
-  **PR checklist**
-* [ ] Tests cover external behaviour and edge cases
-* [ ] Security & secrets handled per policy
-* [ ] Observability (logs/metrics/traces) added where relevant
-* [ ] Docs updated (README/Runbook/ADR)
-* [ ] Reviewer notes: risks, roll-back, toggles
+* [x] Schema added & tested
+* [x] Examples for Account/Opportunity/Case
+* [x] OpenAPI fragment committed
+
+**PR checklist**
+* [x] Tests cover external behaviour and edge cases (15/15 new tests passing)
+* [x] Security & secrets handled per policy (validation only; auth in T-08)
+* [x] Observability (logs/metrics/traces) added where relevant (correlation IDs)
+* [x] Docs updated (README/Runbook/ADR) (README + field conventions + OpenAPI)
+* [x] Reviewer notes: risks, roll-back, toggles (included in PR description)
+
+**Completion Summary**:
+- **PR**: #2 - T-03: Data Contract & OpenAPI Skeleton
+- **Branch**: feature/T03
+- **Files Created**: 8 files (1,839 lines)
+- **Files Modified**: 3 files (108 lines)
+- **Test Results**: 36/36 tests passing (added 15 new tests) ✓
+- **Build Status**: TypeScript compiles successfully ✓
+- **Key Deliverables**:
+  - POST /generate route with Fastify schema validation
+  - OpenAPI 3.0 specification (417 lines)
+  - Sample payloads: account.json, opportunity.json, case.json
+  - Field path conventions documentation (461 lines)
+  - 11 validation tests + 4 sample tests
+  - README updated with endpoint documentation
 
 ---
 
