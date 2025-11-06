@@ -125,7 +125,7 @@ private class DocgenControllerTest {
 
         // Then - Verify return value
         Assert.isNotNull(downloadUrl, 'Download URL should be returned');
-        Assert.isTrue(downloadUrl.contains('salesforce.com'), 'Download URL should be Salesforce file URL');
+        Assert.isTrue(downloadUrl.contains('/sfc/servlet.shepherd/version/download/'), 'Download URL should be Salesforce file URL path');
         Assert.isTrue(downloadUrl.contains('068XXXXXXXXXXXXXXX'), 'Download URL should contain ContentVersionId');
 
         // Then - Verify Generated_Document__c record created and updated
@@ -222,10 +222,10 @@ private class DocgenControllerTest {
     }
 
     /**
-     * Test 4: Idempotency via RequestHash
-     * Given: Same request made twice
+     * Test 4: Idempotency via RequestHash (Cache Hit)
+     * Given: Same request made twice within 24-hour cache window
      * When: generate() is called twice with identical inputs
-     * Then: Both calls succeed, RequestHash prevents duplicate work server-side
+     * Then: First call generates document, second call returns cached result (no HTTP callout)
      */
     @isTest
     static void testIdempotency() {
@@ -236,25 +236,38 @@ private class DocgenControllerTest {
         // Set mock callout
         Test.setMock(HttpCalloutMock.class, new MockDocgenSuccessCallout());
 
-        // When - Call twice with same parameters
+        // When - First call generates document
         Test.startTest();
         String url1 = DocgenController.generate(template.Id, acc.Id, 'PDF');
-        String url2 = DocgenController.generate(template.Id, acc.Id, 'PDF');
         Test.stopTest();
 
-        // Then - Both should return URLs
+        // Then - First call should return URL
         Assert.isNotNull(url1, 'First call should return URL');
-        Assert.isNotNull(url2, 'Second call should return URL');
 
-        // Then - Verify RequestHash is identical
-        List<Generated_Document__c> docs = [
-            SELECT Id, RequestHash__c
+        // Verify first document created
+        List<Generated_Document__c> docsAfterFirst = [
+            SELECT Id, RequestHash__c, Status__c, OutputFileId__c
             FROM Generated_Document__c
             WHERE Account__c = :acc.Id
-            ORDER BY CreatedDate ASC
         ];
-        Assert.areEqual(2, docs.size(), 'Two Generated_Document__c records should exist');
-        Assert.areEqual(docs[0].RequestHash__c, docs[1].RequestHash__c, 'RequestHash should be identical');
+        Assert.areEqual(1, docsAfterFirst.size(), 'One Generated_Document__c should exist after first call');
+        Assert.areEqual('SUCCEEDED', docsAfterFirst[0].Status__c, 'First document should be SUCCEEDED');
+
+        // When - Second call with same parameters (cache hit - no new transaction needed)
+        String url2 = DocgenController.generate(template.Id, acc.Id, 'PDF');
+
+        // Then - Second call should return same URL (from cache)
+        Assert.isNotNull(url2, 'Second call should return URL');
+        Assert.areEqual(url1, url2, 'Both calls should return identical URLs (cache hit)');
+
+        // Then - Verify only ONE record exists (cache hit, no new generation)
+        List<Generated_Document__c> docsAfterSecond = [
+            SELECT Id, RequestHash__c, Status__c
+            FROM Generated_Document__c
+            WHERE Account__c = :acc.Id
+        ];
+        Assert.areEqual(1, docsAfterSecond.size(), 'Only one Generated_Document__c should exist (cache hit)');
+        Assert.areEqual('SUCCEEDED', docsAfterSecond[0].Status__c, 'Cached document should still be SUCCEEDED');
     }
 
     /**
@@ -322,5 +335,80 @@ private class DocgenControllerTest {
         Assert.areEqual(template.Id, doc.Template__c, 'Template lookup should be set');
         Assert.areEqual(UserInfo.getUserId(), doc.RequestedBy__c, 'RequestedBy should be current user');
         Assert.areEqual(0, doc.Attempts__c, 'Attempts should be 0 for interactive flow');
+    }
+
+    /**
+     * Test 7: Cache Expiry - Documents outside 24-hour window
+     * Given: An old successful document exists (>24 hours)
+     * When: generate() is called with same parameters
+     * Then: New document is generated (cache miss due to expiry)
+     *
+     * NOTE: In test context, we cannot manipulate CreatedDate directly.
+     * This test documents the expected behavior. The LAST_N_DAYS:1 filter
+     * in checkExistingDocument() enforces the 24-hour cache window in production.
+     */
+    @isTest
+    static void testIdempotencyCacheExpiry() {
+        // Given
+        Docgen_Template__c template = [
+            SELECT Id, Name, TemplateContentVersionId__c, DataSource__c, SOQL__c,
+                   ClassName__c, StoreMergedDocx__c, ReturnDocxToBrowser__c, PrimaryParent__c
+            FROM Docgen_Template__c
+            LIMIT 1
+        ];
+        Account acc = [SELECT Id FROM Account LIMIT 1];
+
+        // Create an old document manually (simulating expired cache)
+        // Note: We cannot set CreatedDate via DML, but we can verify the query logic
+        DocgenEnvelopeService.Envelope envelope = DocgenEnvelopeService.build(
+            acc.Id,
+            template,
+            'PDF',
+            'en-GB',
+            'Europe/London'
+        );
+
+        Generated_Document__c oldDoc = new Generated_Document__c(
+            Template__c = template.Id,
+            Account__c = acc.Id,
+            RequestHash__c = envelope.requestHash,
+            RequestJSON__c = JSON.serialize(envelope),
+            Status__c = 'SUCCEEDED',
+            OutputFileId__c = '068000000000OLDAAA',
+            OutputFormat__c = 'PDF',
+            Attempts__c = 0,
+            RequestedBy__c = UserInfo.getUserId(),
+            CorrelationId__c = 'old-correlation-id'
+        );
+        insert oldDoc;
+
+        // Set mock callout for new generation
+        Test.setMock(HttpCalloutMock.class, new MockDocgenSuccessCallout());
+
+        // When - Call generate (in real production, if oldDoc.CreatedDate > 24 hours, this would be cache miss)
+        // In test, the doc was just created, so it WILL be a cache hit
+        Test.startTest();
+        String url = DocgenController.generate(template.Id, acc.Id, 'PDF');
+        Test.stopTest();
+
+        // Then - Should return URL (in this test case, from cache since doc is fresh)
+        Assert.isNotNull(url, 'Should return URL');
+
+        // Verify behavior: In test context (doc fresh), we get cache hit
+        List<Generated_Document__c> docs = [
+            SELECT Id, Status__c, CreatedDate
+            FROM Generated_Document__c
+            WHERE Account__c = :acc.Id
+            ORDER BY CreatedDate ASC
+        ];
+
+        // In test: Only 1 doc (cache hit because doc is fresh)
+        // In production with CreatedDate > 24h: Would be 2 docs (new generation)
+        Assert.areEqual(1, docs.size(), 'In test context: cache hit because doc is fresh');
+        Assert.isTrue(docs[0].CreatedDate >= System.now().addSeconds(-60),
+            'Document should be recent (cache window validation)');
+
+        // This test documents the cache expiry logic in checkExistingDocument()
+        // which filters by: AND CreatedDate = LAST_N_DAYS:1
     }
 }

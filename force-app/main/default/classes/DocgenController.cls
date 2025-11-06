@@ -30,13 +30,20 @@ public with sharing class DocgenController {
                 correlationId
             );
 
-            // Step 3: Make HTTP callout to Node API (must happen before DML)
+            // Step 3: Check for existing successful document (idempotency short-circuit)
+            Generated_Document__c existingDoc = checkExistingDocument(envelope.requestHash);
+            if (existingDoc != null) {
+                // Cache hit - return existing download URL without making callout
+                return buildDownloadUrl(existingDoc.OutputFileId__c);
+            }
+
+            // Step 4: Make HTTP callout to Node API (must happen before DML)
             HTTPResponse response = callNodeApi(envelope);
 
-            // Step 4: Create Generated_Document__c record after successful callout
+            // Step 5: Create Generated_Document__c record after successful callout
             doc = createGeneratedDocument(envelope, template.Id, recordId, correlationId);
 
-            // Step 5: Handle response and update record
+            // Step 6: Handle response and update record
             return handleResponse(response, doc, correlationId);
 
         } catch (Exception e) {
@@ -50,6 +57,37 @@ public with sharing class DocgenController {
             auraEx.setMessage(formatErrorMessage(e));
             throw auraEx;
         }
+    }
+
+    /**
+     * Check for existing successful document within cache window (24 hours)
+     * Implements idempotency by returning cached results for duplicate requests
+     *
+     * @param requestHash The idempotency hash
+     * @return Existing document if found and succeeded, null otherwise
+     */
+    private static Generated_Document__c checkExistingDocument(String requestHash) {
+        List<Generated_Document__c> existing = [
+            SELECT Id, OutputFileId__c, Status__c, CreatedDate, CorrelationId__c
+            FROM Generated_Document__c
+            WHERE RequestHash__c = :requestHash
+            AND Status__c = 'SUCCEEDED'
+            AND CreatedDate = LAST_N_DAYS:1  // 24-hour cache window
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        return existing.isEmpty() ? null : existing[0];
+    }
+
+    /**
+     * Build Salesforce download URL for a ContentVersion
+     *
+     * @param contentVersionId The ID of the ContentVersion
+     * @return Download URL in format: /sfc/servlet.shepherd/version/download/{contentVersionId}
+     */
+    private static String buildDownloadUrl(String contentVersionId) {
+        // Salesforce download URL pattern per spec
+        return '/sfc/servlet.shepherd/version/download/' + contentVersionId;
     }
 
     /**
@@ -157,7 +195,6 @@ public with sharing class DocgenController {
         if (statusCode >= 200 && statusCode < 300) {
             // Success path
             Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-            String downloadUrl = (String) body.get('downloadUrl');
             String contentVersionId = (String) body.get('contentVersionId');
             String responseCorrelationId = (String) body.get('correlationId');
 
@@ -169,7 +206,8 @@ public with sharing class DocgenController {
                 CorrelationId__c = responseCorrelationId != null ? responseCorrelationId : correlationId
             );
 
-            return downloadUrl;
+            // Build and return download URL
+            return buildDownloadUrl(contentVersionId);
 
         } else {
             // Error path
