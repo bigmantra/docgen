@@ -1,7 +1,13 @@
 # Docgen - Salesforce PDF Generation Service
 
+[![CI](https://github.com/bigmantra/docgen/actions/workflows/ci.yml/badge.svg)](https://github.com/bigmantra/docgen/actions/workflows/ci.yml)
 [![Node.js Coverage](https://img.shields.io/codecov/c/github/bigmantra/docgen/main?flag=nodejs&label=Node.js&logo=codecov)](https://codecov.io/gh/bigmantra/docgen?flags[0]=nodejs)
 [![Salesforce Coverage](https://img.shields.io/codecov/c/github/bigmantra/docgen/main?flag=salesforce&label=Salesforce&logo=codecov)](https://codecov.io/gh/bigmantra/docgen?flags[0]=salesforce)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?logo=node.js)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io/)
+[![Salesforce](https://img.shields.io/badge/Salesforce-Integration-00A1E0?logo=salesforce)](https://www.salesforce.com/)
 
 A Node.js-based document generation service that creates PDF documents from Salesforce data using docx-templates and LibreOffice, deployed on Azure Container Apps.
 
