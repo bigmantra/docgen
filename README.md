@@ -110,7 +110,10 @@ sf apex run test --test-level RunLocalTests --result-format human
 **Salesforce Components**:
 - `Docgen_Template__c` - Template configuration object (7 fields)
 - `Generated_Document__c` - Document generation tracking object (15 fields)
-- Apex test classes: `DocgenTemplateTest`, `GeneratedDocumentTest`
+- `DocgenDataProvider` - Interface for pluggable data collection strategies
+- `StandardSOQLProvider` - Default SOQL provider with locale-aware formatting
+- `DocgenEnvelopeService` - JSON envelope builder with SHA-256 RequestHash
+- Apex test classes: `DocgenTemplateTest`, `GeneratedDocumentTest`, `StandardSOQLProviderTest`, `DocgenEnvelopeServiceTest` (38/38 tests passing)
 
 ### Environment Variables
 
