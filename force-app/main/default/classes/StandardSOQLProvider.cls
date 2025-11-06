@@ -58,53 +58,83 @@ public with sharing class StandardSOQLProvider implements DocgenDataProvider {
     @TestVisible
     private Map<String, Object> processRecord(SObject record, String locale, String timezone) {
         Map<String, Object> out = new Map<String, Object>();
-
-        // 1) Scalars + parent relationships from populated fields
-        Map<String, Object> populated = record.getPopulatedFieldsAsMap();
-        for (String fieldName : populated.keySet()) {
-            Object value = record.get(fieldName);
-
-            // Parent relationship?
-            if (value instanceof SObject) {
-                out.put(fieldName, processRecord((SObject) value, locale, timezone));
-                continue;
-            }
-
-            // Regular scalar
-            out.put(fieldName, value);
-            putFormatted(out, fieldName, value, locale, timezone);
-        }
-
-        // 2) Child relationships (subqueries) discovered via describe
+        if (record == null) return out;
+    
+        // Metadata + what's actually populated in this row
         Schema.DescribeSObjectResult d = record.getSObjectType().getDescribe();
+        Map<String, Schema.SObjectField> fieldMap = d.fields.getMap();
+        Map<String, Object> populated = record.getPopulatedFieldsAsMap();
+    
+        // Collect child relationship names (e.g., Contacts, Opportunities, CustomChildren__r)
+        Set<String> childRelNames = new Set<String>();
         for (Schema.ChildRelationship cr : d.getChildRelationships()) {
             String relName = cr.getRelationshipName();
-            if (String.isBlank(relName)) {
-                // Some child relationships are not queryable or have no name
+            if (!String.isBlank(relName)) childRelNames.add(relName);
+        }
+    
+        // 1) Scalars & parent relationships that were actually queried.
+        //    IMPORTANT: skip child relationship names here; they are not fields and record.get(<child>) throws.
+        for (String key : populated.keySet()) {
+            if (childRelNames.contains(key)) continue; // defer to child section
+    
+            Object val = populated.get(key); // use populated map; don't call record.get(key)
+    
+            // Parent relationship present (value is an SObject)
+            if (val instanceof SObject) {
+                out.put(key, processRecord((SObject) val, locale, timezone));
                 continue;
             }
-
-            // If the child relationship was included in the SOQL, this returns a list (possibly empty).
-            // If it wasn't queried, most orgs return null (older behavior can throw, hence try/catch).
+    
+            // Scalar value
+            out.put(key, val);
+            if (val != null) {
+                String formatted = formatFieldValue(val, key, locale, timezone);
+                if (formatted != null) out.put(key + '__formatted', formatted);
+            }
+        }
+    
+        // 2) Child relationships (only when sub-queried in SOQL)
+        for (String relName : childRelNames) {
             List<SObject> children;
             try {
-                children = record.getSObjects(relName);
-            } catch (SObjectException ex) {
-                children = null; // Not queried
+                children = record.getSObjects(relName); // null if not subselected; may throw if unsupported -> catch
+            } catch (Exception e) {
+                children = null;
             }
-            if (children == null) {
-                continue; // Subquery not present in the SOQL
-            }
-
-            List<Object> processedChildren = new List<Object>();
+            if (children == null) continue;
+    
+            List<Object> processed = new List<Object>();
             for (SObject child : children) {
-                processedChildren.add(processRecord(child, locale, timezone));
+                processed.add(processRecord(child, locale, timezone));
             }
-            out.put(relName, processedChildren);
+            out.put(relName, processed);
         }
-
+    
+        // 3) (Optional) Add empty __formatted for queried-but-null scalars.
+        //    Only consider true fields on this sObject to avoid relationship names.
+        for (String fieldName : fieldMap.keySet()) {
+            if (out.containsKey(fieldName)) continue;
+            Object v;
+            try {
+                v = record.get(fieldName); // returns null if not queried or null; safe for real fields
+            } catch (Exception e) {
+                continue;
+            }
+            if (v == null) {
+                Schema.DisplayType t = fieldMap.get(fieldName).getDescribe().getType();
+                if (t == Schema.DisplayType.Date || t == Schema.DisplayType.DateTime ||
+                    t == Schema.DisplayType.Currency || t == Schema.DisplayType.Percent ||
+                    t == Schema.DisplayType.Double   || t == Schema.DisplayType.Integer) {
+                    out.put(fieldName, null);
+                    out.put(fieldName + '__formatted', '');
+                }
+            }
+        }
+    
         return out;
     }
+    
+
 
     /**
      * Format field value based on type (adds currency/percent/date/datetime formatting)
