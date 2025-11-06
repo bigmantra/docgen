@@ -337,4 +337,4 @@ Generate a PDF or DOCX document from a Salesforce template.
 
 ## License
 
-ISC
+MIT
