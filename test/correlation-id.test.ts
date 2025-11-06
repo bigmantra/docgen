@@ -221,9 +221,39 @@ describe('Correlation ID', () => {
 
       expect(response.statusCode).toBe(202);
       const body = JSON.parse(response.body);
-      // Empty string should be passed through (not replaced with generated ID)
-      // This tests actual behavior
-      expect(body.correlationId).toBe('');
+      // Empty string should trigger generation of new UUID
+      expect(body.correlationId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+    });
+
+    it('should handle whitespace-only header by generating new ID', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/generate',
+        headers: {
+          'x-correlation-id': '   ',
+        },
+        payload: {
+          templateId: '068xx000000abcdXXX',
+          outputFileName: 'test.pdf',
+          outputFormat: 'PDF',
+          locale: 'en-GB',
+          timezone: 'Europe/London',
+          options: {
+            storeMergedDocx: false,
+            returnDocxToBrowser: true,
+          },
+          data: { Account: { Name: 'Test' } },
+        },
+      });
+
+      expect(response.statusCode).toBe(202);
+      const body = JSON.parse(response.body);
+      // Whitespace-only should trigger generation of new UUID
+      expect(body.correlationId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
     });
 
     it('should return same ID across multiple requests with same header', async () => {
@@ -346,9 +376,7 @@ describe('Correlation ID', () => {
       );
     });
 
-    it('should not set x-correlation-id response header by default', async () => {
-      // Current implementation returns correlationId in body only, not in headers
-      // This documents current behavior - can be changed if header propagation is needed
+    it('should set x-correlation-id response header for distributed tracing', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/generate',
@@ -367,8 +395,42 @@ describe('Correlation ID', () => {
       });
 
       expect(response.statusCode).toBe(202);
-      // Current behavior: correlation ID in body, not in response headers
-      expect(response.headers['x-correlation-id']).toBeUndefined();
+      const body = JSON.parse(response.body);
+
+      // Response header should match body correlationId
+      expect(response.headers['x-correlation-id']).toBeDefined();
+      expect(response.headers['x-correlation-id']).toBe(body.correlationId);
+    });
+
+    it('should propagate provided correlation ID to response header', async () => {
+      const customId = 'custom-trace-id-12345';
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/generate',
+        headers: {
+          'x-correlation-id': customId,
+        },
+        payload: {
+          templateId: '068xx000000abcdXXX',
+          outputFileName: 'test.pdf',
+          outputFormat: 'PDF',
+          locale: 'en-GB',
+          timezone: 'Europe/London',
+          options: {
+            storeMergedDocx: false,
+            returnDocxToBrowser: true,
+          },
+          data: { Account: { Name: 'Test' } },
+        },
+      });
+
+      expect(response.statusCode).toBe(202);
+
+      // Custom ID should be in both header and body
+      expect(response.headers['x-correlation-id']).toBe(customId);
+      const body = JSON.parse(response.body);
+      expect(body.correlationId).toBe(customId);
     });
   });
 
@@ -384,7 +446,7 @@ describe('Correlation ID', () => {
       await app.close();
     });
 
-    it('should include correlation ID in error response body', async () => {
+    it('should include correlation ID in error response body and headers', async () => {
       const customId = 'error-test-1234-4567-89ab-123456789012';
 
       const response = await app.inject({
@@ -400,8 +462,33 @@ describe('Correlation ID', () => {
       });
 
       expect(response.statusCode).toBe(400);
-      // Error responses may not include correlationId in body (Fastify validation error format)
-      // This is acceptable - the important part is the ID was accepted from request
+      const body = JSON.parse(response.body);
+
+      // Correlation ID should be in both header and body for error tracking
+      expect(response.headers['x-correlation-id']).toBe(customId);
+      expect(body.correlationId).toBe(customId);
+      expect(body.error).toBe('Bad Request');
+    });
+
+    it('should generate correlation ID for error responses without custom ID', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/generate',
+        payload: {
+          // Invalid payload - missing required fields
+          templateId: '068xx000000abcdXXX',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+
+      // Should have generated correlation ID
+      expect(body.correlationId).toBeDefined();
+      expect(body.correlationId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+      expect(response.headers['x-correlation-id']).toBe(body.correlationId);
     });
 
     it('should generate unique IDs for parallel requests without headers', async () => {

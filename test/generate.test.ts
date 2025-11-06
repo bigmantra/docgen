@@ -61,7 +61,9 @@ describe('POST /generate - Data Contract Validation', () => {
 
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
-      expect(body.message).toContain('outputFormat');
+      // Error message format changed with schemaErrorFormatter
+      expect(body.message).toMatch(/outputFormat|allowed values/i);
+      expect(body.correlationId).toBeDefined(); // Should have correlation ID
     });
 
     it('should return 400 when outputFileName is missing', async () => {
@@ -321,7 +323,7 @@ describe('POST /generate - Data Contract Validation', () => {
   });
 
   describe('Edge cases and malformed payloads', () => {
-    it('should return 400 for completely malformed JSON', async () => {
+    it('should return 400 for completely malformed JSON with normalized error name', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/generate',
@@ -334,8 +336,10 @@ describe('POST /generate - Data Contract Validation', () => {
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
       expect(body.statusCode).toBe(400);
-      // Fastify returns SyntaxError for malformed JSON
-      expect(body.error).toBe('SyntaxError');
+      // Error name should be normalized to "Bad Request" for 400 errors
+      expect(body.error).toBe('Bad Request');
+      expect(body.message).toBeDefined();
+      expect(body.correlationId).toBeDefined();
     });
 
     it('should handle empty JSON object', async () => {
