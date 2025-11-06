@@ -105,7 +105,7 @@ jobs:
           sf org delete scratch --target-org ciorg --no-prompt
 
       - name: Skip Salesforce validation (no Dev Hub configured)
-        if: "!secrets.SFDX_AUTH_URL"
+        if: ${{ !secrets.SFDX_AUTH_URL }}
         run: |
           echo "⚠️  Salesforce validation skipped: SFDX_AUTH_URL secret not configured"
           echo "To enable Salesforce CI validation:"
