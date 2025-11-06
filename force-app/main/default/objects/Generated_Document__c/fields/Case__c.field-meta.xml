@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>OpportunityId</fullName>
+    <fullName>Case__c</fullName>
     <deleteConstraint>SetNull</deleteConstraint>
-    <description>Optional parent Opportunity. Used for ContentDocumentLink creation after file upload.</description>
+    <description>Optional parent Case. Used for ContentDocumentLink creation after file upload.</description>
     <externalId>false</externalId>
-    <label>Opportunity</label>
-    <referenceTo>Opportunity</referenceTo>
+    <label>Case</label>
+    <referenceTo>Case</referenceTo>
     <relationshipLabel>Generated Documents</relationshipLabel>
     <relationshipName>Generated_Documents</relationshipName>
     <required>false</required>

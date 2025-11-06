@@ -125,9 +125,9 @@ private class GeneratedDocumentTest {
             Status__c = 'QUEUED',
             OutputFormat__c = 'PDF',
             RequestJSON__c = '{"test": "data"}',
-            AccountId = acc.Id,
-            OpportunityId = opp.Id,
-            CaseId = c.Id
+            Account__c = acc.Id,
+            Opportunity__c = opp.Id,
+            Case__c = c.Id
         );
 
         Test.startTest();
@@ -136,14 +136,14 @@ private class GeneratedDocumentTest {
 
         // Then: All parent lookups persist
         Generated_Document__c inserted = [
-            SELECT AccountId, OpportunityId, CaseId
+            SELECT Account__c, Opportunity__c, Case__c
             FROM Generated_Document__c
             WHERE Id = :doc.Id
         ];
 
-        Assert.areEqual(acc.Id, inserted.AccountId, 'AccountId should match');
-        Assert.areEqual(opp.Id, inserted.OpportunityId, 'OpportunityId should match');
-        Assert.areEqual(c.Id, inserted.CaseId, 'CaseId should match');
+        Assert.areEqual(acc.Id, inserted.Account__c, 'Account__c should match');
+        Assert.areEqual(opp.Id, inserted.Opportunity__c, 'Opportunity__c should match');
+        Assert.areEqual(c.Id, inserted.Case__c, 'Case__c should match');
     }
 
     /**
