@@ -63,31 +63,40 @@ public with sharing class StandardSOQLProvider implements DocgenDataProvider {
         for (String fieldName : populatedFields.keySet()) {
             processedFields.add(fieldName.toLowerCase());
 
-            Object fieldValue = null;
+            Object fieldValue;
             Boolean isChildRelationship = false;
 
             // Try to get as child relationship first (List<SObject>)
             try {
                 List<SObject> childRecords = record.getSObjects(fieldName);
-                if (childRecords != null) {
-                    // This is a child relationship
-                    isChildRelationship = true;
-                    List<Object> processedChildren = new List<Object>();
+                // getSObjects returns a list (possibly empty) for child relationships
+                // or throws an exception if not a child relationship
+                isChildRelationship = true;
+                List<Object> processedChildren = new List<Object>();
 
+                if (childRecords != null) {
                     for (SObject childRecord : childRecords) {
                         processedChildren.add(processRecord(childRecord, locale, timezone));
                     }
-
-                    result.put(fieldName, processedChildren);
-                    continue;
                 }
+
+                result.put(fieldName, processedChildren);
+                continue;
             } catch (Exception e) {
                 // Not a child relationship, continue to try as regular field
             }
 
-            // If not a child relationship, get as regular field or parent relationship
-            if (!isChildRelationship) {
+            // Not a child relationship, get as regular field or parent relationship
+            try {
                 fieldValue = record.get(fieldName);
+            } catch (SObjectException e) {
+                // Check if this is genuinely an invalid field error
+                // For fields queried in SOQL but not accessible via get(), skip them
+                if (e.getMessage().contains('Invalid field')) {
+                    continue;
+                }
+                // For other errors, rethrow
+                throw e;
             }
 
             // Check if this is a parent relationship (returns SObject)
