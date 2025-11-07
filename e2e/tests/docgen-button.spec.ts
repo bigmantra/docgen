@@ -117,14 +117,21 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
     // Click button
     await button.click();
 
+    // Wait for spinner to appear (confirms button was clicked and Apex is running)
+    const spinnerVisible = await button.isSpinnerVisible();
+    expect(spinnerVisible).toBe(true);
+
     // Wait for Apex to execute and transaction to commit
-    await salesforce.authenticatedPage.waitForTimeout(5000);
+    // In CI, this may take longer due to network latency
+    await salesforce.authenticatedPage.waitForTimeout(10000);
 
     // Query for Generated_Document__c record
+    console.log('Querying for Generated_Document__c with Account__c =', salesforce.testData.accountId);
     const generatedDocs = await querySalesforce(
       `SELECT Id, Status__c, Account__c FROM Generated_Document__c WHERE Account__c = '${salesforce.testData.accountId}' ORDER BY CreatedDate DESC LIMIT 1`
     );
 
+    console.log('Found', generatedDocs.length, 'Generated_Document__c records');
     expect(generatedDocs.length).toBeGreaterThan(0);
     const doc = generatedDocs[0];
     expect(doc.Status__c).toMatch(/PROCESSING|SUCCEEDED/); // Could transition quickly

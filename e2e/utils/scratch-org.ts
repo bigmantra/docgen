@@ -114,10 +114,13 @@ export async function querySalesforce(soql: string): Promise<any[]> {
     // In CI, use SF_USERNAME env var if available to explicitly target the org
     const targetOrg = process.env.SF_USERNAME;
     const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
-    const { stdout, stderr } = await execAsync(
-      `sf data query --query "${soql}"${targetOrgFlag} --json`,
-      { env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' } }
-    );
+    const command = `sf data query --query "${soql}"${targetOrgFlag} --json`;
+
+    console.log('Executing query:', command);
+
+    const { stdout, stderr } = await execAsync(command, {
+      env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' }
+    });
 
     // Log stderr if present for debugging
     if (stderr) {
@@ -131,12 +134,16 @@ export async function querySalesforce(soql: string): Promise<any[]> {
       throw new Error(`Query failed: ${result.message}`);
     }
 
+    console.log(`Query returned ${result.result.records?.length || 0} records`);
+
     return result.result.records || [];
   } catch (error) {
     if (error instanceof Error) {
       const stderr = (error as any).stderr || '';
+      const stdout = (error as any).stdout || '';
       const stderrInfo = stderr ? `\nStderr: ${stderr}` : '';
-      throw new Error(`Failed to query Salesforce: ${error.message}${stderrInfo}`);
+      const stdoutInfo = stdout ? `\nStdout: ${stdout}` : '';
+      throw new Error(`Failed to query Salesforce: ${error.message}${stdoutInfo}${stderrInfo}`);
     }
     throw error;
   }
