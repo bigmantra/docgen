@@ -31,6 +31,11 @@ export const test = base.extend<{ salesforce: SalesforceFixture }>({
     // Get scratch org credentials
     const orgInfo = await getScratchOrgInfo();
 
+    // Log one-click login URL in CI for debugging
+    if (process.env.CI) {
+      await logOneClickLoginUrl();
+    }
+
     // Set Salesforce session cookies for authentication
     await authenticateWithAccessToken(page, orgInfo);
 
@@ -65,6 +70,57 @@ export const test = base.extend<{ salesforce: SalesforceFixture }>({
 });
 
 export { expect } from '@playwright/test';
+
+/**
+ * Generate and log a one-click login URL for debugging in CI
+ */
+async function logOneClickLoginUrl(): Promise<void> {
+  try {
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+
+    // Get the target org from environment or use default
+    const targetOrg = process.env.SF_USERNAME;
+    const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
+
+    // Generate the login URL
+    const { stdout } = await execAsync(
+      `sf org open --url-only${targetOrgFlag}`,
+      { env: { ...process.env, SF_FORMAT_JSON: 'false' } }
+    );
+
+    const loginUrl = stdout.trim();
+
+    // Log the URL prominently so it's easy to find in CI logs
+    console.log('\n' + '='.repeat(80));
+    console.log('🔐 ONE-CLICK LOGIN URL FOR DEBUGGING');
+    console.log('='.repeat(80));
+    console.log('Copy and paste this URL into your browser to access the scratch org:');
+    console.log('\n' + loginUrl + '\n');
+    console.log('This URL will expire in a few minutes for security reasons.');
+    console.log('Use it to manually inspect the org state and debug the test failure.');
+    console.log('='.repeat(80) + '\n');
+
+    // Also log current org info
+    const { stdout: orgInfo } = await execAsync(
+      `sf org display${targetOrgFlag} --json`,
+      { env: { ...process.env, SF_FORMAT_JSON: 'true' } }
+    );
+
+    const orgData = JSON.parse(orgInfo.replace(/\x1B\[[0-9;]*[mGKHF]/g, ''));
+    if (orgData.result) {
+      console.log('Scratch Org Details:');
+      console.log(`  Username: ${orgData.result.username}`);
+      console.log(`  Instance: ${orgData.result.instanceUrl}`);
+      console.log(`  Org ID: ${orgData.result.id}`);
+      console.log(`  Status: ${orgData.result.status || 'Active'}`);
+      console.log('');
+    }
+  } catch (error) {
+    console.log('⚠️  Could not generate one-click login URL:', error);
+  }
+}
 
 /**
  * Enable test mode in DocgenController via Custom Settings
@@ -248,20 +304,35 @@ async function createTestData(orgInfo: ScratchOrgInfo): Promise<TestData> {
   // Create test Account with unique name to avoid duplicate detection rules
   // Use random string to ensure uniqueness across test runs
   const uniqueId = Math.random().toString(36).substring(2, 15);
+  const accountName = `TestAccount_${uniqueId}`;
+
+  console.log(`Creating test Account: ${accountName}`);
   const accountId = await createRecord('Account', {
-    Name: `TestAccount_${uniqueId}`,
+    Name: accountName,
     BillingCity: 'London',
     BillingCountry: 'United Kingdom',
   });
+  console.log(`✓ Created Account with ID: ${accountId}`);
 
   // Create template with unique name to avoid duplicate detection rules
   // For UI-only tests, we mock the backend response, so template content doesn't matter
+  const templateName = `TestTemplate_${uniqueId}`;
+  console.log(`Creating test Template: ${templateName}`);
   const templateId = await createRecord('Docgen_Template__c', {
-    Name: `TestTemplate_${uniqueId}`,
+    Name: templateName,
     DataSource__c: 'SOQL',
     TemplateContentVersionId__c: '068000000000000AAA', // Mock ContentVersion ID
     SOQL__c: 'SELECT Id, Name FROM Account WHERE Id = :recordId', // Minimal SOQL for test mode
   });
+  console.log(`✓ Created Template with ID: ${templateId}`);
+
+  // In CI, log the record URLs for manual inspection
+  if (process.env.CI) {
+    console.log(`\nDirect URLs to test records:`);
+    console.log(`  Account: ${orgInfo.instanceUrl}/lightning/r/Account/${accountId}/view`);
+    console.log(`  Template: ${orgInfo.instanceUrl}/lightning/r/Docgen_Template__c/${templateId}/view`);
+    console.log('');
+  }
 
   return {
     accountId,
