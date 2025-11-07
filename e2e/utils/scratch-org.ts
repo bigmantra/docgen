@@ -148,7 +148,7 @@ export async function createRecord(
     // In CI, use SF_USERNAME env var if available to explicitly target the org
     const targetOrg = process.env.SF_USERNAME;
     const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
-    const { stdout } = await execAsync(
+    const { stdout, stderr } = await execAsync(
       `sf data create record --sobject ${objectType} --values "${fieldValues}"${targetOrgFlag} --json`,
       { env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' } }
     );
@@ -162,7 +162,10 @@ export async function createRecord(
     return result.result.id;
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`Failed to create record: ${error.message}`);
+      // Include stderr if available to help debug CI issues
+      const stderr = (error as any).stderr || '';
+      const stderrInfo = stderr ? `\nStderr: ${stderr}` : '';
+      throw new Error(`Failed to create record: ${error.message}${stderrInfo}`);
     }
     throw error;
   }

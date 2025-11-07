@@ -151,9 +151,11 @@ async function authenticateWithAccessToken(
  * Returns IDs for use in tests and cleanup
  */
 async function createTestData(orgInfo: ScratchOrgInfo): Promise<TestData> {
-  // Create test Account with fixed name for test assertions
+  // Create test Account with unique name to avoid duplicate detection rules
+  // Use random string to ensure uniqueness across test runs
+  const uniqueId = Math.random().toString(36).substring(2, 15);
   const accountId = await createRecord('Account', {
-    Name: 'E2E Test Account',
+    Name: `TestAccount_${uniqueId}`,
     BillingCity: 'London',
     BillingCountry: 'United Kingdom',
   });
