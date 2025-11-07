@@ -10,6 +10,10 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:lwc": "sfdx-lwc-jest",
+    "test:lwc:watch": "sfdx-lwc-jest --watch",
+    "test:lwc:coverage": "sfdx-lwc-jest --coverage",
+    "test:all": "npm test && npm run test:lwc",
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
@@ -33,6 +37,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@salesforce/sfdx-lwc-jest": "^5.1.0",
     "@types/jest": "^29.5.11",
     "@types/node": "^20.11.0",
     "@types/supertest": "^6.0.2",
