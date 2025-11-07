@@ -59,9 +59,8 @@ export const test = base.extend<{ salesforce: SalesforceFixture }>({
     // Cleanup: Delete test Account (cascade deletes related records)
     await deleteRecords('Account', [testData.accountId]);
 
-    // Note: We intentionally do NOT delete the E2E Test Template
-    // It's shared across all test runs with a fixed name and ID
-    // This keeps the flexipage configuration stable
+    // Cleanup: Delete test Template (each test creates its own unique template)
+    await deleteRecords('Docgen_Template__c', [testData.templateId]);
   },
 });
 
@@ -160,23 +159,14 @@ async function createTestData(orgInfo: ScratchOrgInfo): Promise<TestData> {
     BillingCountry: 'United Kingdom',
   });
 
-  // Query for existing template or create one with a fixed name
+  // Create template with unique name to avoid duplicate detection rules
   // For UI-only tests, we mock the backend response, so template content doesn't matter
-  let templateId: string;
-  const existingTemplates = await querySalesforce(
-    "SELECT Id FROM Docgen_Template__c WHERE Name = 'E2E Test Template' LIMIT 1"
-  );
-
-  if (existingTemplates.length > 0) {
-    templateId = existingTemplates[0].Id;
-  } else {
-    templateId = await createRecord('Docgen_Template__c', {
-      Name: 'E2E Test Template',
-      DataSource__c: 'SOQL',
-      TemplateContentVersionId__c: '068000000000000AAA', // Mock ContentVersion ID
-      SOQL__c: 'SELECT Id, Name FROM Account WHERE Id = :recordId', // Minimal SOQL for test mode
-    });
-  }
+  const templateId = await createRecord('Docgen_Template__c', {
+    Name: `TestTemplate_${uniqueId}`,
+    DataSource__c: 'SOQL',
+    TemplateContentVersionId__c: '068000000000000AAA', // Mock ContentVersion ID
+    SOQL__c: 'SELECT Id, Name FROM Account WHERE Id = :recordId', // Minimal SOQL for test mode
+  });
 
   return {
     accountId,
