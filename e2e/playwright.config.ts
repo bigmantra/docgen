@@ -24,7 +24,7 @@ export default defineConfig({
 
   /* Reporter to use */
   reporter: [
-    ['html'],
+    ['html', { outputFolder: './playwright-report' }],
     ['list'],
     ...(process.env.CI ? [['github' as const]] : []),
   ],
