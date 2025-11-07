@@ -21,9 +21,14 @@ export async function getScratchOrgInfo(): Promise<ScratchOrgInfo> {
     // In CI, use SF_USERNAME env var if available to explicitly target the org
     const targetOrg = process.env.SF_USERNAME;
     const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
-    const { stdout } = await execAsync(`sf org display${targetOrgFlag} --json`, {
+    const { stdout, stderr } = await execAsync(`sf org display${targetOrgFlag} --json`, {
       env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' }
     });
+
+    // Log stderr if present for debugging
+    if (stderr) {
+      console.error('SF CLI stderr:', stderr);
+    }
 
     // Strip any ANSI color codes that might still be present
     const cleanStdout = stdout.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
@@ -50,8 +55,10 @@ export async function getScratchOrgInfo(): Promise<ScratchOrgInfo> {
     };
   } catch (error) {
     if (error instanceof Error) {
+      const stderr = (error as any).stderr || '';
+      const stderrInfo = stderr ? `\nStderr: ${stderr}` : '';
       throw new Error(
-        `Failed to get scratch org info: ${error.message}\n\n` +
+        `Failed to get scratch org info: ${error.message}${stderrInfo}\n\n` +
           'Make sure you have:\n' +
           '1. Salesforce CLI installed (sf)\n' +
           '2. A scratch org created and set as default\n' +
@@ -107,10 +114,16 @@ export async function querySalesforce(soql: string): Promise<any[]> {
     // In CI, use SF_USERNAME env var if available to explicitly target the org
     const targetOrg = process.env.SF_USERNAME;
     const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
-    const { stdout } = await execAsync(
+    const { stdout, stderr } = await execAsync(
       `sf data query --query "${soql}"${targetOrgFlag} --json`,
       { env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' } }
     );
+
+    // Log stderr if present for debugging
+    if (stderr) {
+      console.error('SF CLI stderr (query):', stderr);
+    }
+
     const cleanStdout = stdout.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
     const result = JSON.parse(cleanStdout);
 
@@ -121,7 +134,9 @@ export async function querySalesforce(soql: string): Promise<any[]> {
     return result.result.records || [];
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`Failed to query Salesforce: ${error.message}`);
+      const stderr = (error as any).stderr || '';
+      const stderrInfo = stderr ? `\nStderr: ${stderr}` : '';
+      throw new Error(`Failed to query Salesforce: ${error.message}${stderrInfo}`);
     }
     throw error;
   }
@@ -148,14 +163,25 @@ export async function createRecord(
     // In CI, use SF_USERNAME env var if available to explicitly target the org
     const targetOrg = process.env.SF_USERNAME;
     const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
-    const { stdout, stderr } = await execAsync(
-      `sf data create record --sobject ${objectType} --values "${fieldValues}"${targetOrgFlag} --json`,
-      { env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' } }
-    );
+
+    // Log command for debugging in CI
+    const command = `sf data create record --sobject ${objectType} --values "${fieldValues}"${targetOrgFlag} --json`;
+    console.log('Executing:', command);
+
+    const { stdout, stderr } = await execAsync(command, {
+      env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' }
+    });
+
+    // Log stderr if present for debugging
+    if (stderr) {
+      console.error('SF CLI stderr (create):', stderr);
+    }
+
     const cleanStdout = stdout.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
     const result = JSON.parse(cleanStdout);
 
     if (result.status !== 0) {
+      console.error('SF CLI error response:', JSON.stringify(result, null, 2));
       throw new Error(`Record creation failed: ${result.message}`);
     }
 
