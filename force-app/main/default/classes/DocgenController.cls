@@ -48,13 +48,14 @@ public with sharing class DocgenController {
                 return buildDownloadUrl(existingDoc.OutputFileId__c);
             }
 
-            // Step 4: Make HTTP callout to Node API (must happen before DML)
+            // Step 4: Create Generated_Document__c record BEFORE callout (T-12: pass ID to Node)
+            doc = createGeneratedDocument(envelope, template.Id, recordId, correlationId);
+            envelope.generatedDocumentId = doc.Id; // T-12: Add ID to envelope
+
+            // Step 5: Make HTTP callout to Node API (Node will update the record)
             HTTPResponse response = callNodeApi(envelope);
 
-            // Step 5: Create Generated_Document__c record after successful callout
-            doc = createGeneratedDocument(envelope, template.Id, recordId, correlationId);
-
-            // Step 6: Handle response and update record
+            // Step 6: Handle response (Node has already updated the record status)
             return handleResponse(response, doc, correlationId);
 
         } catch (Exception e) {
