@@ -1,6 +1,17 @@
 // Mock modules before import
 jest.mock('child_process');
-jest.mock('fs/promises');
+jest.mock('fs', () => {
+  const actualFs = jest.requireActual('fs');
+  return {
+    ...actualFs,
+    promises: {
+      mkdir: jest.fn(),
+      writeFile: jest.fn(),
+      readFile: jest.fn(),
+      rm: jest.fn(),
+    },
+  };
+});
 
 // Create global mock for promisified execFile (must be before util mock)
 const mockExecFileAsync = jest.fn();
@@ -25,6 +36,8 @@ jest.mock('util', () => {
 import { LibreOfficeConverter, convertDocxToPdf } from '../src/convert/soffice';
 import { promises as fsPromises } from 'fs';
 
+const mockedFsPromises = jest.mocked(fsPromises);
+
 describe('LibreOfficeConverter', () => {
   let converter: LibreOfficeConverter;
 
@@ -35,10 +48,10 @@ describe('LibreOfficeConverter', () => {
 
     // Set default mock implementations
     mockExecFileAsync.mockResolvedValue({ stdout: '', stderr: '' });
-    fsPromises.mkdir.mockResolvedValue(undefined);
-    fsPromises.writeFile.mockResolvedValue(undefined);
-    fsPromises.readFile.mockResolvedValue(Buffer.from('mock pdf content'));
-    fsPromises.rm.mockResolvedValue(undefined);
+    mockedFsPromises.mkdir.mockResolvedValue(undefined);
+    mockedFsPromises.writeFile.mockResolvedValue(undefined);
+    mockedFsPromises.readFile.mockResolvedValue(Buffer.from('mock pdf content'));
+    mockedFsPromises.rm.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -66,10 +79,10 @@ describe('LibreOfficeConverter', () => {
       );
 
       // Verify temp files were created and cleaned up
-      expect(fsPromises.mkdir).toHaveBeenCalled();
-      expect(fsPromises.writeFile).toHaveBeenCalled();
-      expect(fsPromises.readFile).toHaveBeenCalled();
-      expect(fsPromises.rm).toHaveBeenCalled();
+      expect(mockedFsPromises.mkdir).toHaveBeenCalled();
+      expect(mockedFsPromises.writeFile).toHaveBeenCalled();
+      expect(mockedFsPromises.readFile).toHaveBeenCalled();
+      expect(mockedFsPromises.rm).toHaveBeenCalled();
     });
 
     it('should handle timeout by killing the process', async () => {
@@ -90,7 +103,7 @@ describe('LibreOfficeConverter', () => {
       ).rejects.toThrow(/timeout|timed out/i);
 
       // Verify cleanup was attempted
-      expect(fsPromises.rm).toHaveBeenCalled();
+      expect(mockedFsPromises.rm).toHaveBeenCalled();
     });
 
     it('should handle process crash (non-zero exit code)', async () => {
@@ -106,7 +119,7 @@ describe('LibreOfficeConverter', () => {
       ).rejects.toThrow(/conversion failed|exited/i);
 
       // Verify cleanup was attempted even on error
-      expect(fsPromises.rm).toHaveBeenCalled();
+      expect(mockedFsPromises.rm).toHaveBeenCalled();
 
       // Verify stats tracked the failure
       const stats = converter.getStats();
@@ -179,7 +192,7 @@ describe('LibreOfficeConverter', () => {
 
     it('should cleanup temp files even on error', async () => {
       // Mock readFile to throw after successful conversion
-      fsPromises.readFile.mockRejectedValueOnce(new Error('File read failed'));
+      mockedFsPromises.readFile.mockRejectedValueOnce(new Error('File read failed'));
 
       const docxBuffer = Buffer.from('mock docx content');
 
@@ -188,7 +201,7 @@ describe('LibreOfficeConverter', () => {
       ).rejects.toThrow(/File read failed/i);
 
       // Verify cleanup was still attempted
-      expect(fsPromises.rm).toHaveBeenCalled();
+      expect(mockedFsPromises.rm).toHaveBeenCalled();
     });
 
     it('should track stats correctly', async () => {
@@ -260,7 +273,7 @@ describe('LibreOfficeConverter', () => {
       });
 
       // Verify mkdir was called with custom workdir path
-      expect(fsPromises.mkdir).toHaveBeenCalledWith(
+      expect(mockedFsPromises.mkdir).toHaveBeenCalledWith(
         expect.stringContaining(customWorkdir),
         expect.any(Object)
       );
