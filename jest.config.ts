@@ -28,7 +28,7 @@ const config: Config.InitialOptions = {
   },
   coverageDirectory: 'coverage',
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
-  verbose: true,
+  verbose: false,
   testTimeout: 10000,
 };
 

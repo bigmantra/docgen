@@ -136,7 +136,9 @@ export class SalesforceAuth {
       }
 
       // Cache token with expiry
-      const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
+      // JWT Bearer tokens don't return expires_in, default to 2 hours (Salesforce standard)
+      const expiresIn = tokenResponse.expires_in || 7200;
+      const expiresAt = Date.now() + expiresIn * 1000;
       this.cachedToken = {
         accessToken: tokenResponse.access_token,
         expiresAt,
@@ -145,7 +147,7 @@ export class SalesforceAuth {
 
       logger.info(
         {
-          expiresIn: tokenResponse.expires_in,
+          expiresIn,
           expiresAt: new Date(expiresAt).toISOString(),
         },
         'Salesforce access token acquired'
@@ -195,7 +197,7 @@ export class SalesforceAuth {
       });
     } catch (error) {
       logger.error({ error }, 'Failed to sign JWT');
-      throw new Error(`Failed to sign JWT: ${error}`);
+      throw new Error(`Failed to sign JWT: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
