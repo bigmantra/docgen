@@ -1,11 +1,10 @@
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
-import path from 'path';
-import { SalesforceAuth } from '../src/sf/auth';
-import dotenv from 'dotenv';
+import { SalesforceAuth, createSalesforceAuth } from '../src/sf/auth';
+import { config } from 'dotenv';
+import { loadConfig } from '../src/config';
 
 // Load environment variables from .env file
-dotenv.config();
+config();
 
 /**
  * Integration test for Salesforce JWT Bearer Authentication.
@@ -18,19 +17,19 @@ dotenv.config();
 describe('Salesforce JWT Bearer Authentication - Integration', () => {
   const isCI = process.env.CI === 'true';
 
-  // Load private key from file if not in environment (for local development)
-  if (!process.env.SF_PRIVATE_KEY && !isCI) {
-    const keyPath = path.join(process.cwd(), 'keys', 'server.key');
-    if (fs.existsSync(keyPath)) {
-      process.env.SF_PRIVATE_KEY = fs.readFileSync(keyPath, 'utf8');
-    }
+  // Check if we have SF_PRIVATE_KEY_PATH set
+  if (!process.env.SF_PRIVATE_KEY_PATH && !process.env.SF_PRIVATE_KEY && !isCI) {
+    // Set the path for local development if not already set
+    process.env.SF_PRIVATE_KEY_PATH = './keys/server.key';
   }
 
+  // Load config to check if we have all required credentials
+  const appConfig = loadConfig();
   const hasCredentials = !!(
-    process.env.SF_DOMAIN &&
-    process.env.SF_USERNAME &&
-    process.env.SF_CLIENT_ID &&
-    process.env.SF_PRIVATE_KEY
+    appConfig.sfDomain &&
+    appConfig.sfUsername &&
+    appConfig.sfClientId &&
+    appConfig.sfPrivateKey
   );
 
   // Skip integration tests if credentials are not configured
@@ -40,36 +39,28 @@ describe('Salesforce JWT Bearer Authentication - Integration', () => {
     let auth: SalesforceAuth;
 
     beforeAll(() => {
-      const config = {
-        sfDomain: process.env.SF_DOMAIN!,
-        sfUsername: process.env.SF_USERNAME!,
-        sfClientId: process.env.SF_CLIENT_ID!,
-        sfPrivateKey: process.env.SF_PRIVATE_KEY!,
-      };
-
-      auth = new SalesforceAuth(config);
+      // Create auth using the loaded config (which properly handles SF_PRIVATE_KEY_PATH)
+      auth = createSalesforceAuth({
+        sfDomain: appConfig.sfDomain!,
+        sfUsername: appConfig.sfUsername!,
+        sfClientId: appConfig.sfClientId!,
+        sfPrivateKey: appConfig.sfPrivateKey!,
+      });
     });
 
     describe('JWT Creation and Signing', () => {
       it('should create a valid JWT with correct claims', () => {
-        const config = {
-          sfDomain: process.env.SF_DOMAIN!,
-          sfUsername: process.env.SF_USERNAME!,
-          sfClientId: process.env.SF_CLIENT_ID!,
-          sfPrivateKey: process.env.SF_PRIVATE_KEY!,
-        };
-
         const now = Math.floor(Date.now() / 1000);
         const exp = now + 300; // 5 minutes
 
         const payload = {
-          iss: config.sfClientId,
+          iss: appConfig.sfClientId,
           aud: 'https://login.salesforce.com',
-          sub: config.sfUsername,
+          sub: appConfig.sfUsername,
           exp,
         };
 
-        const token = jwt.sign(payload, config.sfPrivateKey, {
+        const token = jwt.sign(payload, appConfig.sfPrivateKey!, {
           algorithm: 'RS256',
         });
 
@@ -80,9 +71,9 @@ describe('Salesforce JWT Bearer Authentication - Integration', () => {
         // Decode and verify claims
         const decoded = jwt.decode(token, { complete: true }) as any;
         expect(decoded.header.alg).toBe('RS256');
-        expect(decoded.payload.iss).toBe(config.sfClientId);
+        expect(decoded.payload.iss).toBe(appConfig.sfClientId);
         expect(decoded.payload.aud).toBe('https://login.salesforce.com');
-        expect(decoded.payload.sub).toBe(config.sfUsername);
+        expect(decoded.payload.sub).toBe(appConfig.sfUsername);
         expect(decoded.payload.exp).toBeGreaterThan(now);
       });
     });
@@ -126,7 +117,7 @@ describe('Salesforce JWT Bearer Authentication - Integration', () => {
       it('should be able to make authenticated API calls', async () => {
         const token = await auth.getAccessToken();
         const authAny = auth as any;
-        const instanceUrl = authAny.cachedToken?.instanceUrl || `https://${process.env.SF_DOMAIN}`;
+        const instanceUrl = authAny.cachedToken?.instanceUrl || `https://${appConfig.sfDomain}`;
 
         // Test API call to get Salesforce version
         const response = await fetch(`${instanceUrl}/services/data`, {
@@ -152,7 +143,7 @@ describe('Salesforce JWT Bearer Authentication - Integration', () => {
       it('should be able to query Salesforce objects', async () => {
         const token = await auth.getAccessToken();
         const authAny = auth as any;
-        const instanceUrl = authAny.cachedToken?.instanceUrl || `https://${process.env.SF_DOMAIN}`;
+        const instanceUrl = authAny.cachedToken?.instanceUrl || `https://${appConfig.sfDomain}`;
 
         // Query for available sObjects
         const response = await fetch(
@@ -207,10 +198,10 @@ describe('Salesforce JWT Bearer Authentication - Integration', () => {
     describe('Error Scenarios', () => {
       it('should handle invalid client ID gracefully', async () => {
         const invalidAuth = new SalesforceAuth({
-          sfDomain: process.env.SF_DOMAIN!,
-          sfUsername: process.env.SF_USERNAME!,
+          sfDomain: appConfig.sfDomain!,
+          sfUsername: appConfig.sfUsername!,
           sfClientId: 'INVALID_CLIENT_ID',
-          sfPrivateKey: process.env.SF_PRIVATE_KEY!,
+          sfPrivateKey: appConfig.sfPrivateKey!,
         });
 
         await expect(invalidAuth.getAccessToken()).rejects.toThrow();
@@ -218,10 +209,10 @@ describe('Salesforce JWT Bearer Authentication - Integration', () => {
 
       it('should handle invalid username gracefully', async () => {
         const invalidAuth = new SalesforceAuth({
-          sfDomain: process.env.SF_DOMAIN!,
+          sfDomain: appConfig.sfDomain!,
           sfUsername: 'invalid@example.com',
-          sfClientId: process.env.SF_CLIENT_ID!,
-          sfPrivateKey: process.env.SF_PRIVATE_KEY!,
+          sfClientId: appConfig.sfClientId!,
+          sfPrivateKey: appConfig.sfPrivateKey!,
         });
 
         await expect(invalidAuth.getAccessToken()).rejects.toThrow();

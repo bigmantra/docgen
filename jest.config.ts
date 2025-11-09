@@ -30,6 +30,7 @@ const config: Config.InitialOptions = {
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   verbose: false,
   testTimeout: 10000,
+  maxWorkers: 1, // Run tests sequentially to avoid LibreOffice converter resource conflicts
 };
 
 export default config;

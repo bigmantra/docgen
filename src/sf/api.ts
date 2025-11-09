@@ -160,7 +160,7 @@ export class SalesforceApi {
    * Make HTTP request with retry logic
    */
   private async request<T>(
-    method: 'GET' | 'POST' | 'PATCH',
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
     path: string,
     body?: any,
     options?: RequestOptions,
@@ -208,7 +208,7 @@ export class SalesforceApi {
    */
   private async handleError<T>(
     error: unknown,
-    method: 'GET' | 'POST' | 'PATCH',
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
     path: string,
     body: any,
     options: RequestOptions | undefined,
@@ -267,6 +267,13 @@ export class SalesforceApi {
       : JSON.stringify(error.response.data);
 
     throw new Error(`Salesforce API error: ${status} - ${errorMessage}`);
+  }
+
+  /**
+   * Delete a Salesforce record
+   */
+  async delete(path: string, options?: RequestOptions): Promise<void> {
+    return this.request<void>('DELETE', path, undefined, options);
   }
 
   /**
