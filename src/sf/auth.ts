@@ -1,9 +1,9 @@
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import type { SalesforceTokenResponse, CachedToken } from '../types';
-import pino from 'pino';
+import { createLogger } from '../utils/logger';
 
-const logger = pino({ name: 'sf:auth' });
+const logger = createLogger('sf:auth');
 
 const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000; // 60 seconds buffer
 

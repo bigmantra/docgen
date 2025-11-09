@@ -1,8 +1,8 @@
 import axios from 'axios';
 import type { SalesforceAuth } from './auth';
-import pino from 'pino';
+import { createLogger } from '../utils/logger';
 
-const logger = pino({ name: 'sf:api' });
+const logger = createLogger('sf:api');
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS_MS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
