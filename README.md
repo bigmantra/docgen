@@ -355,7 +355,7 @@ const pdfBuffer = await convertDocxToPdf(docxBuffer, {
 ```
 
 **Constraints**:
-- **Container Sizing**: 2 vCPU / 4 GB RAM (ACA UK South)
+- **Container Sizing**: 2 vCPU / 4 GB RAM (ACA East US)
 - **Max Concurrent**: 8 jobs (chosen based on LibreOffice CPU/memory usage)
 - **Workdir**: `/tmp` (ephemeral, cleaned up)
 - **LibreOffice**: Installed via `apt-get install -y libreoffice`
@@ -994,7 +994,7 @@ Generate a PDF or DOCX document from a Salesforce template.
 - **Testing**: Jest + ts-jest + Supertest + Nock
 - **Document Processing**: docx-templates + LibreOffice
 - **Authentication**: Azure AD (inbound), JWT Bearer (outbound to Salesforce)
-- **Hosting**: Azure Container Apps (UK South, 2 vCPU / 4 GB RAM)
+- **Hosting**: Azure Container Apps (East US, 2 vCPU / 4 GB RAM)
 - **Observability**: Azure Application Insights
 
 ## License

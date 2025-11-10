@@ -803,7 +803,7 @@ dependencies
 1. Navigate to Azure Portal
 2. Create Application Insights resource:
    - Resource Group: `rg-docgen-prod-uksouth`
-   - Region: UK South
+   - Region: East US
    - Name: `appi-docgen-prod-uksouth`
 3. Copy **Instrumentation Key** and **Connection String**
 4. Set environment variable: `AZURE_MONITOR_CONNECTION_STRING`
