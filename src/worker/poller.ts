@@ -531,6 +531,8 @@ export class PollerService {
       message.includes('not found') ||
       message.includes('invalid') ||
       message.includes('bad request') ||
+      message.includes(' 404') || // Match ": 404" or " 404 "
+      message.includes(' 400') || // Match ": 400" or " 400 "
       error.status === 404 ||
       error.status === 400
     ) {

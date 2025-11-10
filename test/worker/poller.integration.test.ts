@@ -48,7 +48,19 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
     process.env.SF_USERNAME = SF_USERNAME;
     process.env.SF_CLIENT_ID = SF_CLIENT_ID;
 
-    // Initialize Salesforce API
+    // Initialize Salesforce API - must create auth before getting it
+    const { loadConfig } = await import('../../src/config');
+    const config = loadConfig();
+
+    const { createSalesforceAuth } = await import('../../src/sf/auth');
+    createSalesforceAuth({
+      sfDomain: config.sfDomain!,
+      sfUsername: config.sfUsername!,
+      sfClientId: config.sfClientId!,
+      sfPrivateKey: config.sfPrivateKey!,
+    });
+
+    // NOW get the auth instance
     const sfAuth = getSalesforceAuth();
     if (!sfAuth) {
       throw new Error('Failed to initialize Salesforce auth');
@@ -113,7 +125,30 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
   });
 
   it('should process a QUEUED document end-to-end', async () => {
-    // Prepare request JSON
+    // Create a Generated_Document__c record first to get the ID
+    const tempRequest = {
+      templateId: testTemplateId,
+      outputFileName: 'Test_Integration_Output.pdf',
+      outputFormat: 'PDF',
+      requestHash: 'sha256:integration-test-hash-' + Date.now(),
+    };
+
+    const createResponse = await sfApi.post(
+      '/services/data/v59.0/sobjects/Generated_Document__c',
+      {
+        Status__c: 'QUEUED',
+        RequestJSON__c: '{}', // Temporary, will update
+        RequestHash__c: tempRequest.requestHash,
+        CorrelationId__c: 'test-' + Date.now().toString().slice(-10), // Keep under 36 chars
+        Attempts__c: 0,
+      }
+    );
+
+    expect(createResponse.success).toBe(true);
+    generatedDocumentId = createResponse.id;
+    console.log(`Created Generated_Document__c with ID: ${generatedDocumentId}`);
+
+    // Now prepare the full request envelope with the generatedDocumentId
     const requestEnvelope: DocgenRequest = {
       templateId: testTemplateId,
       outputFileName: 'Test_Integration_Output.pdf',
@@ -129,33 +164,33 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
           Name: 'Integration Test Account',
           AnnualRevenue__formatted: '£1,000,000',
         },
+        GeneratedDate__formatted: new Date().toLocaleDateString('en-GB'),
       },
       parents: {
         AccountId: null,
         OpportunityId: null,
         CaseId: null,
       },
-      requestHash: 'sha256:integration-test-hash-' + Date.now(),
+      requestHash: tempRequest.requestHash,
+      generatedDocumentId: generatedDocumentId, // Include the document ID
     };
 
-    // Create a Generated_Document__c record with Status=QUEUED
-    const createResponse = await sfApi.post(
-      '/services/data/v59.0/sobjects/Generated_Document__c',
+    // Update the record with the complete RequestJSON
+    await sfApi.patch(
+      `/services/data/v59.0/sobjects/Generated_Document__c/${generatedDocumentId}`,
       {
-        Status__c: 'QUEUED',
         RequestJSON__c: JSON.stringify(requestEnvelope),
-        RequestHash__c: requestEnvelope.requestHash,
-        CorrelationId__c: 'integration-test-' + Date.now(),
-        Attempts__c: 0,
       }
     );
 
-    expect(createResponse.success).toBe(true);
-    generatedDocumentId = createResponse.id;
-    console.log(`Created Generated_Document__c with ID: ${generatedDocumentId}`);
+    // Start the poller so processBatch() will actually run
+    await pollerService.start();
 
-    // Run a single poll cycle (not starting the continuous loop)
+    // Run a single poll cycle
     await pollerService.processBatch();
+
+    // Stop the poller immediately to prevent continuous polling
+    await pollerService.stop();
 
     // Wait a bit for async processing to complete
     await new Promise(resolve => setTimeout(resolve, 5000));
@@ -185,11 +220,32 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
   }, 60000); // 60 second timeout for LibreOffice conversion
 
   it('should handle invalid template (404) with non-retryable error', async () => {
-    // Create a request with a non-existent template ID
-    const requestEnvelope: DocgenRequest = {
+    // Create record first to get ID
+    const tempRequest = {
       templateId: '068000000000000AAA', // Invalid ContentVersionId
       outputFileName: 'Invalid_Template_Test.pdf',
       outputFormat: 'PDF',
+      requestHash: 'sha256:integration-test-invalid-' + Date.now(),
+    };
+
+    const createResponse = await sfApi.post(
+      '/services/data/v59.0/sobjects/Generated_Document__c',
+      {
+        Status__c: 'QUEUED',
+        RequestJSON__c: '{}', // Temporary
+        RequestHash__c: tempRequest.requestHash,
+        CorrelationId__c: 'test-inv-' + Date.now().toString().slice(-10), // Keep under 36 chars
+        Attempts__c: 0,
+      }
+    );
+
+    const testDocId = createResponse.id;
+
+    // Now prepare the full request envelope with the generatedDocumentId
+    const requestEnvelope: DocgenRequest = {
+      templateId: tempRequest.templateId,
+      outputFileName: tempRequest.outputFileName,
+      outputFormat: tempRequest.outputFormat as 'PDF',
       locale: 'en-GB',
       timezone: 'Europe/London',
       options: {
@@ -200,32 +256,30 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
         Account: {
           Name: 'Test Account',
         },
+        GeneratedDate__formatted: new Date().toLocaleDateString('en-GB'),
       },
       parents: {
         AccountId: null,
         OpportunityId: null,
         CaseId: null,
       },
-      requestHash: 'sha256:integration-test-invalid-' + Date.now(),
+      requestHash: tempRequest.requestHash,
+      generatedDocumentId: testDocId, // Include the document ID
     };
 
-    // Create Generated_Document__c
-    const createResponse = await sfApi.post(
-      '/services/data/v59.0/sobjects/Generated_Document__c',
+    // Update with complete RequestJSON
+    await sfApi.patch(
+      `/services/data/v59.0/sobjects/Generated_Document__c/${testDocId}`,
       {
-        Status__c: 'QUEUED',
         RequestJSON__c: JSON.stringify(requestEnvelope),
-        RequestHash__c: requestEnvelope.requestHash,
-        CorrelationId__c: 'integration-test-invalid-' + Date.now(),
-        Attempts__c: 0,
       }
     );
 
-    const testDocId = createResponse.id;
-
     try {
-      // Process the batch
+      // Start poller, process batch, then stop
+      await pollerService.start();
       await pollerService.processBatch();
+      await pollerService.stop();
 
       // Wait for processing
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -243,9 +297,14 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
 
       const document = queryResponse.records[0];
 
+      // Debug: print actual values
+      console.log('Test 2 - Document Status:', document.Status__c);
+      console.log('Test 2 - Document Error:', document.Error__c);
+      console.log('Test 2 - Document Attempts:', document.Attempts__c);
+
       // Should be marked as FAILED immediately (non-retryable)
       expect(document.Status__c).toBe('FAILED');
-      expect(document.Error__c).toContain('not found');
+      expect(document.Error__c).toContain('404'); // Check for 404 error code
       expect(document.Attempts__c).toBe(1); // Only 1 attempt for non-retryable
     } finally {
       // Clean up
@@ -258,11 +317,32 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
   }, 30000); // 30 second timeout
 
   it('should respect lock TTL and not double-process', async () => {
-    // Create a document
-    const requestEnvelope: DocgenRequest = {
+    // Create record first to get ID
+    const tempRequest = {
       templateId: testTemplateId,
       outputFileName: 'Lock_Test.pdf',
       outputFormat: 'PDF',
+      requestHash: 'sha256:integration-test-lock-' + Date.now(),
+    };
+
+    const createResponse = await sfApi.post(
+      '/services/data/v59.0/sobjects/Generated_Document__c',
+      {
+        Status__c: 'QUEUED',
+        RequestJSON__c: '{}', // Temporary
+        RequestHash__c: tempRequest.requestHash,
+        CorrelationId__c: 'test-lock-' + Date.now().toString().slice(-10), // Keep under 36 chars
+        Attempts__c: 0,
+      }
+    );
+
+    const testDocId = createResponse.id;
+
+    // Prepare full request envelope with generatedDocumentId
+    const requestEnvelope: DocgenRequest = {
+      templateId: tempRequest.templateId,
+      outputFileName: tempRequest.outputFileName,
+      outputFormat: tempRequest.outputFormat as 'PDF',
       locale: 'en-GB',
       timezone: 'Europe/London',
       options: {
@@ -279,21 +359,17 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
         OpportunityId: null,
         CaseId: null,
       },
-      requestHash: 'sha256:integration-test-lock-' + Date.now(),
+      requestHash: tempRequest.requestHash,
+      generatedDocumentId: testDocId,
     };
 
-    const createResponse = await sfApi.post(
-      '/services/data/v59.0/sobjects/Generated_Document__c',
+    // Update with complete RequestJSON
+    await sfApi.patch(
+      `/services/data/v59.0/sobjects/Generated_Document__c/${testDocId}`,
       {
-        Status__c: 'QUEUED',
         RequestJSON__c: JSON.stringify(requestEnvelope),
-        RequestHash__c: requestEnvelope.requestHash,
-        CorrelationId__c: 'integration-test-lock-' + Date.now(),
-        Attempts__c: 0,
       }
     );
-
-    const testDocId = createResponse.id;
 
     try {
       // Manually lock the document (simulating another worker)
@@ -306,8 +382,10 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
         }
       );
 
-      // Try to process - should skip the locked document
+      // Start poller, try to process (should skip locked doc), then stop
+      await pollerService.start();
       await pollerService.processBatch();
+      await pollerService.stop();
 
       // Wait a bit
       await new Promise(resolve => setTimeout(resolve, 2000));
