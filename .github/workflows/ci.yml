@@ -47,6 +47,10 @@ jobs:
           SF_USERNAME: ${{ secrets.SF_USERNAME }}
           SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
           SF_PRIVATE_KEY: ${{ secrets.SF_PRIVATE_KEY }}
+          # Poller configs (using defaults - poller disabled in CI)
+          POLLER_ENABLED: false
+          POLLER_INTERVAL_MS: 15000
+          POLLER_BATCH_SIZE: 20
 
       - name: Run integration tests
         run: |
@@ -79,6 +83,8 @@ jobs:
           SF_USERNAME: ${{ secrets.SF_USERNAME }}
           SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
           SF_PRIVATE_KEY: ${{ secrets.SF_PRIVATE_KEY }}
+          # Poller configs (using defaults - poller disabled in CI)
+          POLLER_ENABLED: false
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
