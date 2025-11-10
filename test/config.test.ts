@@ -376,6 +376,7 @@ describe('Config', () => {
           lockTtlMs: 120000,
           maxAttempts: 3,
         },
+        enableTelemetry: true,
         // imageAllowlist is optional
       };
 
