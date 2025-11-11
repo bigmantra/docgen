@@ -1,14 +1,28 @@
-import { describe, expect, it, beforeAll, afterAll } from '@jest/globals';
+import { describe, expect, it, jest, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import supertest from 'supertest';
 import { FastifyInstance } from 'fastify';
 import { build } from '../src/server';
 
+// Mock the secrets module for Key Vault connectivity tests
+jest.mock('../src/config/secrets');
+
+import { checkKeyVaultConnectivity } from '../src/config/secrets';
+
 describe('Health Endpoints', () => {
   let app: FastifyInstance;
+  const mockCheckKeyVaultConnectivity = checkKeyVaultConnectivity as jest.MockedFunction<
+    typeof checkKeyVaultConnectivity
+  >;
 
   beforeAll(async () => {
     app = await build();
     await app.ready();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Default mock: Key Vault is accessible
+    mockCheckKeyVaultConnectivity.mockResolvedValue(true);
   });
 
   afterAll(async () => {
@@ -124,6 +138,102 @@ describe('Health Endpoints', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('Bad Request');
+    });
+  });
+
+  describe('GET /readyz - Key Vault Connectivity', () => {
+    it('should include keyVault status in checks when configured', async () => {
+      // Set environment to production with Key Vault
+      const originalEnv = process.env.NODE_ENV;
+      const originalKvUri = process.env.KEY_VAULT_URI;
+
+      process.env.NODE_ENV = 'production';
+      process.env.KEY_VAULT_URI = 'https://test-kv.vault.azure.net/';
+
+      mockCheckKeyVaultConnectivity.mockResolvedValue(true);
+
+      const response = await supertest(app.server).get('/readyz');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('checks');
+      expect(response.body.checks).toHaveProperty('keyVault');
+
+      // Restore environment
+      process.env.NODE_ENV = originalEnv;
+      process.env.KEY_VAULT_URI = originalKvUri;
+    });
+
+    it('should return 200 when Key Vault is accessible in production', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalKvUri = process.env.KEY_VAULT_URI;
+
+      process.env.NODE_ENV = 'production';
+      process.env.KEY_VAULT_URI = 'https://test-kv.vault.azure.net/';
+
+      mockCheckKeyVaultConnectivity.mockResolvedValue(true);
+
+      const response = await supertest(app.server).get('/readyz');
+
+      expect(response.status).toBe(200);
+      expect(response.body.ready).toBe(true);
+      expect(response.body.checks.keyVault).toBe(true);
+
+      // Restore environment
+      process.env.NODE_ENV = originalEnv;
+      process.env.KEY_VAULT_URI = originalKvUri;
+    });
+
+    it('should return 503 when Key Vault is unreachable in production', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalKvUri = process.env.KEY_VAULT_URI;
+
+      process.env.NODE_ENV = 'production';
+      process.env.KEY_VAULT_URI = 'https://test-kv.vault.azure.net/';
+
+      mockCheckKeyVaultConnectivity.mockResolvedValue(false);
+
+      const response = await supertest(app.server).get('/readyz');
+
+      expect(response.status).toBe(503);
+      expect(response.body.ready).toBe(false);
+      expect(response.body.checks.keyVault).toBe(false);
+
+      // Restore environment
+      process.env.NODE_ENV = originalEnv;
+      process.env.KEY_VAULT_URI = originalKvUri;
+    });
+
+    it('should not check Key Vault in development mode', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalKvUri = process.env.KEY_VAULT_URI;
+
+      process.env.NODE_ENV = 'development';
+      process.env.KEY_VAULT_URI = 'https://test-kv.vault.azure.net/';
+
+      const response = await supertest(app.server).get('/readyz');
+
+      expect(response.status).toBe(200);
+      expect(mockCheckKeyVaultConnectivity).not.toHaveBeenCalled();
+
+      // Restore environment
+      process.env.NODE_ENV = originalEnv;
+      process.env.KEY_VAULT_URI = originalKvUri;
+    });
+
+    it('should not check Key Vault when KEY_VAULT_URI not set', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalKvUri = process.env.KEY_VAULT_URI;
+
+      process.env.NODE_ENV = 'production';
+      delete process.env.KEY_VAULT_URI;
+
+      await supertest(app.server).get('/readyz');
+
+      expect(mockCheckKeyVaultConnectivity).not.toHaveBeenCalled();
+
+      // Restore environment
+      process.env.NODE_ENV = originalEnv;
+      process.env.KEY_VAULT_URI = originalKvUri;
     });
   });
 });

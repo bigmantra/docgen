@@ -19,7 +19,7 @@ dotenv.config();
  * @returns Configured Fastify instance
  */
 export async function build(): Promise<FastifyInstance> {
-  const config = loadConfig();
+  const config = await loadConfig();
 
   // Initialize Azure Application Insights (T-15)
   initializeAppInsights();
@@ -92,27 +92,29 @@ export async function build(): Promise<FastifyInstance> {
  * Start the server if this file is run directly
  */
 if (require.main === module) {
-  const config = loadConfig();
+  (async () => {
+    const config = await loadConfig();
 
-  build()
-    .then(async (app) => {
-      try {
-        await app.listen({
-          port: config.port,
-          host: '0.0.0.0', // Required for container deployments
-        });
+    build()
+      .then(async (app) => {
+        try {
+          await app.listen({
+            port: config.port,
+            host: '0.0.0.0', // Required for container deployments
+          });
 
-        app.log.info(`Server listening on port ${config.port}`);
-        app.log.info(`Environment: ${config.nodeEnv}`);
-      } catch (err) {
-        app.log.error(err);
+          app.log.info(`Server listening on port ${config.port}`);
+          app.log.info(`Environment: ${config.nodeEnv}`);
+        } catch (err) {
+          app.log.error(err);
+          process.exit(1);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to build application:', err);
         process.exit(1);
-      }
-    })
-    .catch((err) => {
-      console.error('Failed to build application:', err);
-      process.exit(1);
-    });
+      });
+  })();
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {

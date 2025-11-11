@@ -50,7 +50,7 @@ describeIntegration('Poller Service - Integration Tests with Real Salesforce', (
 
     // Initialize Salesforce API - must create auth before getting it
     const { loadConfig } = await import('../../src/config');
-    const config = loadConfig();
+    const config = await loadConfig();
 
     const { createSalesforceAuth } = await import('../../src/sf/auth');
     createSalesforceAuth({

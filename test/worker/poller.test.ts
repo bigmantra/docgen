@@ -22,20 +22,26 @@ jest.mock('pino', () => {
   return jest.fn(() => mockLogger);
 });
 
-// Check if we have Salesforce credentials
-const appConfig = loadConfig();
-const hasCredentials = !!(
-  appConfig.sfDomain &&
-  appConfig.sfUsername &&
-  appConfig.sfClientId &&
-  appConfig.sfPrivateKey
-);
+// Config and credentials - will be loaded in beforeAll
+let appConfig: Awaited<ReturnType<typeof loadConfig>>;
+let hasCredentials = false;
+let baseUrl: string;
 
-// Skip tests if credentials are not available
-const describeWithAuth = hasCredentials ? describe : describe.skip;
+describe('PollerService', () => {
+  let poller: PollerService;
 
-if (!hasCredentials) {
-  console.log(`
+  beforeAll(async () => {
+    // Load config first
+    appConfig = await loadConfig();
+    hasCredentials = !!(
+      appConfig.sfDomain &&
+      appConfig.sfUsername &&
+      appConfig.sfClientId &&
+      appConfig.sfPrivateKey
+    );
+
+    if (!hasCredentials) {
+      console.log(`
 ================================================================================
 SKIPPING POLLER UNIT TESTS: Missing Salesforce credentials.
 
@@ -47,14 +53,12 @@ To run these tests locally, create a .env file with:
 
 For CI/CD, set these as environment variables or secrets.
 ================================================================================
-  `);
-}
+      `);
+      return;
+    }
 
-describeWithAuth('PollerService', () => {
-  let poller: PollerService;
-  const baseUrl = `https://${appConfig.sfDomain}`;
+    baseUrl = `https://${appConfig.sfDomain}`;
 
-  beforeAll(() => {
     // Initialize real Salesforce auth explicitly for tests
     // This ensures auth is properly set up before PollerService creates its own instances
     createSalesforceAuth({
@@ -63,7 +67,13 @@ describeWithAuth('PollerService', () => {
       sfClientId: appConfig.sfClientId!,
       sfPrivateKey: appConfig.sfPrivateKey!,
     });
-    // PollerService will now be able to use getSalesforceAuth() successfully
+
+    // Load config into poller module by starting and stopping a temporary poller
+    // This ensures config is available for unit tests that call methods directly
+    const tempPoller = new PollerService();
+    await tempPoller.start();
+    await tempPoller.stop();
+    // PollerService will now be able to use getSalesforceAuth() and config successfully
   });
 
   beforeEach(() => {

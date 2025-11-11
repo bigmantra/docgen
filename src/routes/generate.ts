@@ -134,7 +134,7 @@ async function generateHandler(
   );
 
   // Load config for Salesforce domain and other settings
-  const config = loadConfig();
+  const config = await loadConfig();
   if (!config.sfDomain) {
     throw new Error('Salesforce domain not configured');
   }

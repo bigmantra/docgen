@@ -16,6 +16,8 @@ config();
 
 describe('Salesforce JWT Bearer Authentication - Integration', () => {
   const isCI = process.env.CI === 'true';
+  let appConfig: Awaited<ReturnType<typeof loadConfig>>;
+  let hasCredentials = false;
 
   // Check if we have SF_PRIVATE_KEY_PATH set
   if (!process.env.SF_PRIVATE_KEY_PATH && !process.env.SF_PRIVATE_KEY && !isCI) {
@@ -23,22 +25,30 @@ describe('Salesforce JWT Bearer Authentication - Integration', () => {
     process.env.SF_PRIVATE_KEY_PATH = './keys/server.key';
   }
 
-  // Load config to check if we have all required credentials
-  const appConfig = loadConfig();
-  const hasCredentials = !!(
-    appConfig.sfDomain &&
-    appConfig.sfUsername &&
-    appConfig.sfClientId &&
-    appConfig.sfPrivateKey
-  );
-
-  // Skip integration tests if credentials are not configured
-  const describeIntegration = hasCredentials ? describe : describe.skip;
-
-  describeIntegration('Real Salesforce Authentication', () => {
+  describe('Real Salesforce Authentication', () => {
     let auth: SalesforceAuth;
 
-    beforeAll(() => {
+    beforeAll(async () => {
+      // Load config to check if we have all required credentials
+      appConfig = await loadConfig();
+      hasCredentials = !!(
+        appConfig.sfDomain &&
+        appConfig.sfUsername &&
+        appConfig.sfClientId &&
+        appConfig.sfPrivateKey
+      );
+
+      if (!hasCredentials) {
+        console.log(`
+================================================================================
+SKIPPING SALESFORCE AUTH INTEGRATION TESTS: Missing credentials.
+
+To run these tests locally, create a .env file with Salesforce credentials.
+================================================================================
+        `);
+        return;
+      }
+
       // Create auth using the loaded config (which properly handles SF_PRIVATE_KEY_PATH)
       auth = createSalesforceAuth({
         sfDomain: appConfig.sfDomain!,
