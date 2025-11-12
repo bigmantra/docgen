@@ -203,12 +203,14 @@ jobs:
       - name: Update Container App with new image
         id: update
         run: |
-          echo "🔄 Updating Container App with image: ${{ needs.build-image.outputs.image_uri }}"
+          # Reconstruct the image URI since it's being masked as a secret
+          IMAGE_URI="${{ secrets.ACR_NAME }}.azurecr.io/docgen-api:${{ github.sha }}"
+          echo "🔄 Updating Container App with image: ${IMAGE_URI}"
 
           az containerapp update \
             --name ${{ secrets.APP_NAME }} \
             --resource-group ${{ secrets.RESOURCE_GROUP }} \
-            --image ${{ needs.build-image.outputs.image_uri }} \
+            --image ${IMAGE_URI} \
             --output none
 
           echo "✅ Container App updated"
