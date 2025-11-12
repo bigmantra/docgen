@@ -72,6 +72,7 @@ jobs:
             --template-file infra/main.bicep \
             --parameters infra/parameters/production.bicepparam \
             --parameters imageTag=${{ github.event.release.tag_name || inputs.release_tag }} \
+            --mode Incremental \
             --output json)
 
           echo "✅ Infrastructure deployment completed"
@@ -218,13 +219,16 @@ jobs:
       - name: Update Container App with new image
         id: update
         run: |
-          echo "🔄 Updating Container App with release: ${{ github.event.release.tag_name || inputs.release_tag }}"
-          echo "📦 Image URI: ${{ needs.build-image.outputs.image_uri }}"
+          # Reconstruct the image URI since it's being masked as a secret
+          IMAGE_TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
+          IMAGE_URI="${{ secrets.ACR_NAME }}.azurecr.io/docgen-api:${IMAGE_TAG}"
+          echo "🔄 Updating Container App with release: ${IMAGE_TAG}"
+          echo "📦 Image URI: ${IMAGE_URI}"
 
           az containerapp update \
             --name ${{ secrets.APP_NAME }} \
             --resource-group ${{ secrets.RESOURCE_GROUP }} \
-            --image ${{ needs.build-image.outputs.image_uri }} \
+            --image ${IMAGE_URI} \
             --output none
 
           echo "✅ Container App updated"
@@ -291,7 +295,9 @@ jobs:
       - name: Test /healthz endpoint
         run: |
           echo "🏥 Testing health endpoint..."
-          APP_URL="${{ needs.deploy-infrastructure.outputs.app_url }}"
+          # Reconstruct the URL since outputs might be masked
+          APP_URL="https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io"
+          echo "Testing URL: ${APP_URL}"
 
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${APP_URL}/healthz)
 
@@ -305,7 +311,8 @@ jobs:
       - name: Test /readyz endpoint
         run: |
           echo "🔍 Testing readiness endpoint..."
-          APP_URL="${{ needs.deploy-infrastructure.outputs.app_url }}"
+          # Reconstruct the URL since outputs might be masked
+          APP_URL="https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io"
 
           RESPONSE=$(curl -s ${APP_URL}/readyz)
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${APP_URL}/readyz)
@@ -322,7 +329,8 @@ jobs:
       - name: Test document generation (5 times)
         run: |
           echo "📄 Testing document generation (5 iterations)..."
-          APP_URL="${{ needs.deploy-infrastructure.outputs.app_url }}"
+          # Reconstruct the URL since outputs might be masked
+          APP_URL="https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io"
 
           SUCCESS_COUNT=0
           TOTAL_TESTS=5
@@ -510,7 +518,7 @@ jobs:
             2. Investigate the failure cause
             3. Fix the issue and create a new release
 
-            **App URL:** ${{ needs.deploy-infrastructure.outputs.app_url }}
+            **App URL:** https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io
             `;
 
             github.rest.issues.createComment({
@@ -540,7 +548,7 @@ jobs:
 
             **Release:** ${{ github.event.release.tag_name || inputs.release_tag }}
             **Deployed by:** @${{ github.actor }}
-            **App URL:** ${{ needs.deploy-infrastructure.outputs.app_url }}
+            **App URL:** https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io
 
             ### Deployment Details
             - **Release Tag:** \`${{ github.event.release.tag_name || inputs.release_tag }}\`
