@@ -470,22 +470,267 @@ az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" --que
 
 ## Cost Estimates
 
-Approximate monthly costs for one environment:
+### Monthly Cost Breakdown
 
-| Resource | SKU | Estimated Cost |
-|----------|-----|----------------|
-| Container Apps | 2 vCPU, 4 GB RAM | $50-80/month |
-| Container Registry | Basic | $5/month |
-| Key Vault | Standard | $1/month |
-| Application Insights | Pay-as-you-go | $10-30/month |
-| Log Analytics | Pay-as-you-go | $5-15/month |
-| **Total** | | **$71-131/month** |
+Approximate costs for a **single environment** (staging or production):
 
-**Cost optimization tips:**
-- Use Basic SKU for ACR in non-production environments
-- Configure log retention policies (30 days default)
-- Use autoscaling (1-5 replicas) to scale down during low usage
-- Monitor Application Insights ingestion and sampling
+| Resource | SKU/Size | Unit Cost | Staging | Production | Notes |
+|----------|----------|-----------|---------|------------|-------|
+| **Container Apps** | 2 vCPU, 4 GB RAM | ~$0.000024/vCPU-sec | $50-80 | $100-200 | Varies by replica count and runtime |
+| **Container Registry** | Basic/Standard | Fixed | $5 | $10 | Basic for staging, Standard for production |
+| **Key Vault** | Standard | Operations-based | $1 | $1 | ~1,000 operations/month |
+| **Application Insights** | Pay-as-you-go | GB ingested | $10-30 | $20-50 | Depends on telemetry volume |
+| **Log Analytics** | Pay-as-you-go | GB ingested | $5-15 | $10-25 | Depends on log volume |
+| **Egress (Data Transfer)** | Pay-as-you-go | GB transferred | $5-10 | $10-20 | Salesforce API calls, file downloads |
+| **Total (1 replica)** | | | **$76-141** | **$151-306** | At minimum scale |
+| **Total (avg 3 replicas)** | | | **$150-240** | **$250-400** | During moderate load |
+| **Total (max 5 replicas)** | | | **$250-400** | **$400-600** | During peak load |
+
+### Cost by Environment
+
+#### Staging Environment
+- **Expected usage**: Low to moderate (development, testing, demos)
+- **Typical replica count**: 1-2 replicas (80% of time)
+- **Peak replica count**: 3-4 replicas (20% of time, during testing)
+- **Estimated monthly cost**: **$80-150/month**
+
+#### Production Environment
+- **Expected usage**: Moderate to high (live user traffic)
+- **Typical replica count**: 2-3 replicas (70% of time)
+- **Peak replica count**: 4-5 replicas (30% of time, during business hours)
+- **Estimated monthly cost**: **$150-300/month** (can reach $400-600 during sustained high load)
+
+### Scaling Cost Impact
+
+Container Apps costs scale **linearly** with replica count and runtime:
+
+| Replica Count | vCPU-seconds/month | Approximate Cost | Use Case |
+|---------------|-------------------|------------------|----------|
+| **1 replica** | 5,184,000 | $50-80/month | Baseline, off-peak hours |
+| **2 replicas** | 10,368,000 | $100-160/month | Moderate load |
+| **3 replicas** | 15,552,000 | $150-240/month | High load, business hours |
+| **4 replicas** | 20,736,000 | $200-320/month | Peak load |
+| **5 replicas** | 25,920,000 | $250-400/month | Maximum scale |
+
+**Formula**: Monthly cost ≈ (vCPU-seconds × $0.000024) + (GB-seconds × $0.000003)
+
+**Example calculation** for 3 replicas running 24/7:
+- vCPU-seconds: 2 vCPU × 3 replicas × 2,592,000 seconds/month = 15,552,000
+- Cost: 15,552,000 × $0.000024 = **$373.25/month** (Container Apps only)
+
+### Cost Optimization Strategies
+
+#### 1. Autoscaling Configuration
+
+**Default**: 1-5 replicas, CPU >70% threshold
+```bicep
+scale: {
+  minReplicas: 1  // Low baseline cost
+  maxReplicas: 5  // Handle peak load
+  rules: [
+    {
+      name: 'cpu-scaling'
+      custom: {
+        type: 'cpu'
+        metadata: {
+          type: 'Utilization'
+          value: '70'  // Scale at 70% CPU
+        }
+      }
+    }
+  ]
+}
+```
+
+**Optimized for cost** (staging):
+```bicep
+scale: {
+  minReplicas: 1  // Single replica during off-peak
+  maxReplicas: 3  // Lower max to control costs
+  rules: [
+    {
+      name: 'cpu-scaling'
+      custom: {
+        type: 'cpu'
+        metadata: {
+          type: 'Utilization'
+          value: '75'  // Higher threshold = less aggressive scaling
+        }
+      }
+    }
+  ]
+}
+```
+
+**Savings**: ~30-40% reduction in compute costs by limiting max replicas
+
+#### 2. Container Registry Optimization
+
+**SKU Comparison**:
+- **Basic**: $5/month, 10 GB storage, 10 webhooks
+- **Standard**: $20/month, 100 GB storage, 100 webhooks
+- **Premium**: $500/month, 500 GB storage, 500 webhooks, geo-replication
+
+**Recommendation**:
+- **Staging**: Basic SKU ($5/month) - sufficient for development
+- **Production**: Standard SKU ($20/month) - better performance and reliability
+
+**Savings**: Use Basic for non-production = **$15/month saved** per environment
+
+#### 3. Log Retention & Sampling
+
+**Default**: 30-day retention, 100% sampling
+```bicep
+retentionInDays: 30  // Default
+```
+
+**Optimized** (staging):
+```bicep
+retentionInDays: 7   // 1 week for staging (reduce by 75%)
+```
+
+**Application Insights sampling** (reduce telemetry volume):
+```typescript
+// In src/obs/insights.ts
+export const initializeAppInsights = async (config: AppConfig) => {
+  const azureMonitorOptions = {
+    samplingRatio: 0.5,  // 50% sampling = 50% cost reduction
+    // OR adaptive sampling
+    enableAutoCollectDependencies: true,
+    enableAutoCollectExceptions: true,
+  };
+};
+```
+
+**Savings**: 7-day retention + 50% sampling = **$15-30/month saved** on telemetry
+
+#### 4. Scheduled Scaling (Production Only)
+
+For production with predictable load patterns:
+
+**Scale down during off-hours** (requires Azure Logic App or Function):
+- **Business hours** (8 AM - 6 PM): 2-5 replicas
+- **Off-hours** (6 PM - 8 AM): 1-2 replicas
+- **Weekends**: 1 replica
+
+**Savings**: ~40% reduction in compute costs = **$60-100/month saved**
+
+#### 5. Resource Sizing Optimization
+
+**Current**: 2 vCPU / 4 GB RAM per replica
+**Alternative for staging**: 1 vCPU / 2 GB RAM
+
+**Trade-offs**:
+- **Pro**: 50% cost reduction (~$25-40/month saved)
+- **Con**: Lower throughput, longer conversion times, may not handle peaks
+
+**Recommendation**: Keep current sizing (2 vCPU / 4 GB) for predictable performance
+
+#### 6. Egress Cost Reduction
+
+**Minimize data transfer**:
+- Use Application Insights sampling (reduces telemetry upload)
+- Cache Salesforce responses aggressively (template cache already implemented)
+- Compress logs before shipping (configure in Log Analytics)
+
+**Estimated savings**: $5-10/month
+
+### Cost Monitoring & Alerts
+
+#### Azure Cost Management
+
+**Set up budget alerts**:
+```bash
+# Create budget (via Azure Portal or CLI)
+az consumption budget create \
+  --budget-name "docgen-staging-budget" \
+  --resource-group "docgen-staging-rg" \
+  --amount 150 \
+  --time-grain Monthly \
+  --time-period 2025-01-01/2026-12-31
+
+# Configure alert at 80% of budget
+# (Alert via email when spending reaches $120)
+```
+
+**Monitor cost trends**:
+1. Azure Portal → Cost Management → Cost Analysis
+2. Group by: Resource (identify expensive resources)
+3. Filter by: Resource Group (`docgen-staging-rg`)
+4. Review monthly trends and anomalies
+
+#### KQL Query for Cost Attribution
+
+```kusto
+// Application Insights ingestion cost tracking
+union withsource=SourceTable *
+| where TimeGenerated > ago(30d)
+| summarize DataVolumeMB = sum(_BilledSize) / 1024 / 1024 by SourceTable
+| extend EstimatedCostUSD = DataVolumeMB * 2.30 / 1000  // $2.30/GB
+| order by DataVolumeMB desc
+| project SourceTable, DataVolumeMB, EstimatedCostUSD
+```
+
+#### Cost Anomaly Detection
+
+**Alert on unexpected cost spikes**:
+- Replica count stuck at max (autoscaling issue)
+- High telemetry ingestion (logging too verbose)
+- Egress spike (large file downloads)
+
+**Remediation**:
+- Check autoscaling configuration
+- Review logging levels
+- Investigate traffic patterns
+
+### Annual Cost Projection
+
+Based on typical usage patterns:
+
+| Scenario | Monthly Cost | Annual Cost | Notes |
+|----------|-------------|-------------|-------|
+| **Staging (optimized)** | $80-120 | $960-1,440 | 1-2 replicas avg, Basic ACR, 7-day retention |
+| **Staging (unoptimized)** | $150-250 | $1,800-3,000 | 3-4 replicas avg, Standard ACR, 30-day retention |
+| **Production (optimized)** | $150-250 | $1,800-3,000 | 2-3 replicas avg, scheduled scaling |
+| **Production (unoptimized)** | $300-500 | $3,600-6,000 | 4-5 replicas avg, no optimization |
+| **Both Environments (optimized)** | $230-370 | $2,760-4,440 | Best case with all optimizations |
+| **Both Environments (unoptimized)** | $450-750 | $5,400-9,000 | Worst case without optimization |
+
+**Recommendation**: Implement optimization strategies to stay in **$230-370/month** range (**$2,760-4,440/year**) for both staging and production.
+
+### Reserved Instances & Commitments
+
+Azure Container Apps does not currently support reserved instances. For long-term cost savings:
+- **Monitor Azure announcements** for reserved capacity options
+- **Consider Azure Hybrid Benefit** if applicable (Windows Server licenses)
+- **Evaluate Azure Dev/Test pricing** for non-production environments (if eligible)
+
+### Cost Comparison with Alternatives
+
+| Platform | Monthly Cost (2 vCPU, 4 GB) | Notes |
+|----------|---------------------------|-------|
+| **Azure Container Apps** | $50-80/instance | Current choice, serverless |
+| **Azure Container Instances** | $30-50/instance | Lower cost, but no autoscaling |
+| **Azure App Service (Linux)** | $55-75/instance | Similar cost, different features |
+| **Azure Kubernetes Service** | $70-100/node + $73/cluster | Higher baseline, more complexity |
+| **Azure Functions Premium** | $80-120/plan | Serverless, higher cold start |
+
+**Conclusion**: Azure Container Apps offers the best balance of cost, scalability, and operational simplicity for this workload.
+
+---
+
+## Cost Optimization Checklist
+
+- [✓] **Staging**: Use Basic ACR SKU ($5 vs $20)
+- [✓] **Autoscaling**: Configure 1-5 replicas with CPU >70% threshold
+- [ ] **Staging**: Reduce log retention to 7 days (from 30 days)
+- [ ] **Both**: Enable Application Insights sampling (50%)
+- [ ] **Production**: Implement scheduled scaling (off-hours scale-down)
+- [ ] **Both**: Set up budget alerts ($150 staging, $300 production)
+- [ ] **Monitor**: Review monthly cost trends in Azure Cost Management
+- [ ] **Review**: Quarterly cost review and optimization assessment
+
+**Estimated total savings**: **$60-120/month** (30-40% reduction)
 
 ---
 
