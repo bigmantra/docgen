@@ -277,7 +277,9 @@ jobs:
       - name: Test /healthz endpoint
         run: |
           echo "🏥 Testing health endpoint..."
-          APP_URL="${{ needs.deploy-infrastructure.outputs.app_url }}"
+          # Reconstruct the URL since outputs might be masked
+          APP_URL="https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io"
+          echo "Testing URL: ${APP_URL}"
 
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${APP_URL}/healthz)
 
@@ -291,7 +293,8 @@ jobs:
       - name: Test /readyz endpoint
         run: |
           echo "🔍 Testing readiness endpoint..."
-          APP_URL="${{ needs.deploy-infrastructure.outputs.app_url }}"
+          # Reconstruct the URL since outputs might be masked
+          APP_URL="https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io"
 
           RESPONSE=$(curl -s ${APP_URL}/readyz)
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${APP_URL}/readyz)
@@ -308,7 +311,8 @@ jobs:
       - name: Test document generation
         run: |
           echo "📄 Testing document generation..."
-          APP_URL="${{ needs.deploy-infrastructure.outputs.app_url }}"
+          # Reconstruct the URL since outputs might be masked
+          APP_URL="https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io"
 
           # Create test payload
           cat > /tmp/test-payload.json <<'EOF'
@@ -359,7 +363,7 @@ jobs:
       - name: Summary
         run: |
           echo "🎉 All smoke tests passed!"
-          echo "📍 App URL: ${{ needs.deploy-infrastructure.outputs.app_url }}"
+          echo "📍 App URL: https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io"
           echo "🏷️ Image Tag: ${{ github.sha }}"
           echo "📦 Revision: ${{ needs.update-app.outputs.revision_name }}"
 
@@ -467,7 +471,7 @@ jobs:
 
             **Commit:** \`${{ github.sha }}\`
             **Triggered by:** @${{ github.actor }}
-            **App URL:** ${{ needs.deploy-infrastructure.outputs.app_url }}
+            **App URL:** https://${{ secrets.APP_NAME }}.greenocean-24bbbaf2.eastus.azurecontainerapps.io
 
             ### Deployment Details
             - **Image Tag:** \`${{ github.sha }}\`
