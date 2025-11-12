@@ -3,6 +3,7 @@ import { HealthStatus, ReadinessStatus } from '../types';
 import { getCorrelationId, setCorrelationId } from '../utils/correlation-id';
 import { getAADVerifier } from '../auth';
 import { getSalesforceAuth } from '../sf';
+import { checkKeyVaultConnectivity } from '../config/secrets';
 
 /**
  * Health check routes
@@ -58,19 +59,31 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // Check Key Vault connectivity if configured (T-16)
+    let keyVaultReady: boolean | undefined;
+    const keyVaultUri = process.env.KEY_VAULT_URI;
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    if (isProduction && keyVaultUri) {
+      try {
+        keyVaultReady = await checkKeyVaultConnectivity(keyVaultUri);
+      } catch (error) {
+        keyVaultReady = false;
+        request.log.error({ correlationId, error }, 'Key Vault connectivity check failed');
+      }
+    }
+
     // Determine overall readiness
     // In production, all configured dependencies must be ready
-    const isProduction = process.env.NODE_ENV === 'production';
     const ready = !isProduction ||
-      (jwksReady !== false && salesforceReady !== false);
+      (jwksReady !== false && salesforceReady !== false && keyVaultReady !== false);
 
     const status: ReadinessStatus = {
       ready,
       checks: {
         jwks: jwksReady,
         salesforce: salesforceReady,
-        // Placeholder for future dependency checks (T-16)
-        keyVault: undefined,
+        keyVault: keyVaultReady,
       },
     };
 

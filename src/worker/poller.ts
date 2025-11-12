@@ -16,10 +16,19 @@ import type {
   PollerStats,
   ProcessingResult,
   DocgenRequest,
+  AppConfig,
 } from '../types';
 
 const logger = pino();
-const config = loadConfig();
+let config: AppConfig;
+
+// Helper to ensure config is loaded
+function getConfig(): AppConfig {
+  if (!config) {
+    throw new Error('Config not loaded. PollerService must be started first.');
+  }
+  return config;
+}
 
 export class PollerService {
   private running: boolean = false;
@@ -48,6 +57,11 @@ export class PollerService {
   async start(): Promise<void> {
     if (this.running) {
       throw new Error('Poller is already running');
+    }
+
+    // Load config if not already loaded
+    if (!config) {
+      config = await loadConfig();
     }
 
     logger.info('Starting poller service');
@@ -123,9 +137,9 @@ export class PollerService {
    */
   getPollingInterval(): number {
     if (this.currentQueueDepth > 0) {
-      return config.poller.intervalMs; // 15 seconds when active
+      return getConfig().poller.intervalMs; // 15 seconds when active
     }
-    return config.poller.idleIntervalMs; // 60 seconds when idle
+    return getConfig().poller.idleIntervalMs; // 60 seconds when idle
   }
 
   /**
@@ -248,13 +262,13 @@ export class PollerService {
   async fetchQueuedDocuments(): Promise<QueuedDocument[]> {
     try {
       const sfAuth = getSalesforceAuth();
-      if (!sfAuth || !config.sfDomain) {
+      if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
 
       const now = new Date().toISOString();
-      const batchSize = config.poller.batchSize;
+      const batchSize = getConfig().poller.batchSize;
 
       // Query for QUEUED documents that are not locked or have expired locks
       const soql = `
@@ -284,12 +298,12 @@ export class PollerService {
   async lockDocument(documentId: string): Promise<boolean> {
     try {
       const sfAuth = getSalesforceAuth();
-      if (!sfAuth || !config.sfDomain) {
+      if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
 
-      const lockUntil = new Date(Date.now() + config.poller.lockTtlMs).toISOString();
+      const lockUntil = new Date(Date.now() + getConfig().poller.lockTtlMs).toISOString();
 
       await sfApi.patch(`/services/data/v59.0/sobjects/Generated_Document__c/${documentId}`, {
         Status__c: 'PROCESSING',
@@ -321,10 +335,10 @@ export class PollerService {
     try {
       // Initialize Salesforce API and template service
       const sfAuth = getSalesforceAuth();
-      if (!sfAuth || !config.sfDomain) {
+      if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
       const templateService = new TemplateService(sfApi);
 
       // Fetch template
@@ -339,7 +353,7 @@ export class PollerService {
       const mergedDocx = await mergeTemplate(templateBuffer, request.data, {
         locale: request.locale,
         timezone: request.timezone,
-        imageAllowlist: config.imageAllowlist,
+        imageAllowlist: getConfig().imageAllowlist,
       });
 
       // Convert to PDF if needed
@@ -347,8 +361,8 @@ export class PollerService {
       if (request.outputFormat === 'PDF') {
         log.debug('Converting DOCX to PDF');
         outputBuffer = await convertDocxToPdf(mergedDocx, {
-          timeout: config.conversionTimeout,
-          workdir: config.conversionWorkdir,
+          timeout: getConfig().conversionTimeout,
+          workdir: getConfig().conversionWorkdir,
           correlationId: doc.CorrelationId__c,
         });
       } else {
@@ -450,7 +464,7 @@ export class PollerService {
         documentId: doc.Id,
         error: error.message,
         retryable,
-        retried: retryable && doc.Attempts__c < config.poller.maxAttempts,
+        retried: retryable && doc.Attempts__c < getConfig().poller.maxAttempts,
       };
     }
   }
@@ -465,10 +479,10 @@ export class PollerService {
   ): Promise<void> {
     try {
       const sfAuth = getSalesforceAuth();
-      if (!sfAuth || !config.sfDomain) {
+      if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
 
       await updateGeneratedDocument(
         documentId,
@@ -501,13 +515,13 @@ export class PollerService {
 
     try {
       const sfAuth = getSalesforceAuth();
-      if (!sfAuth || !config.sfDomain) {
+      if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
 
       // Check if we should retry
-      if (retryable && newAttempts <= config.poller.maxAttempts) {
+      if (retryable && newAttempts <= getConfig().poller.maxAttempts) {
         // Calculate backoff
         const backoffMs = this.computeBackoff(newAttempts);
         const scheduledRetryTime = new Date(Date.now() + backoffMs).toISOString();
@@ -538,7 +552,7 @@ export class PollerService {
           Status__c: 'FAILED',
           Attempts__c: newAttempts,
           Error__c: retryable
-            ? `Max attempts (${config.poller.maxAttempts}) exceeded. Last error: ${errorMessage}`
+            ? `Max attempts (${getConfig().poller.maxAttempts}) exceeded. Last error: ${errorMessage}`
             : `Non-retryable error: ${errorMessage}`,
         });
 

@@ -181,6 +181,190 @@ JWKS_URI=https://login.microsoftonline.com/<azure-tenant-id>/discovery/v2.0/keys
 AUTH_BYPASS_DEVELOPMENT=true  # Only works when NODE_ENV=development
 ```
 
+## Deployment & Operations
+
+### Deployment Architecture
+
+The application can be deployed to **Azure Container Apps** with the following architecture:
+
+```mermaid
+graph TB
+    subgraph "GitHub"
+        A[Main Branch] -->|Merge| B[CI/CD: Staging]
+        C[Release] -->|Manual Approval| D[CI/CD: Production]
+    end
+
+    subgraph "Azure Container Apps"
+        E[Container Registry] --> F[Container App<br/>2 vCPU / 4 GB<br/>1-5 replicas]
+        G[Key Vault<br/>Secrets] -.->|Managed Identity| F
+        F --> H[Application Insights<br/>Monitoring]
+        I[Log Analytics<br/>Logs] -.-> H
+    end
+
+    B --> E
+    D --> E
+    F --> J[Salesforce]
+
+    style F fill:#90EE90
+    style G fill:#FFD700
+    style H fill:#87CEEB
+```
+
+**Infrastructure Resources** (per environment):
+- **Container App**: 2 vCPU, 4 GB RAM, autoscaling 1-5 replicas (CPU >70%)
+- **Container Registry**: Docker image storage (Basic SKU staging, Standard production)
+- **Key Vault**: Secrets management (SF credentials, Azure Monitor connection string)
+- **Application Insights**: Telemetry, metrics, alerts
+- **Log Analytics Workspace**: Centralized logging
+
+### Deployment Methods
+
+The application supports two deployment methods:
+
+#### 1. Automated CI/CD (Recommended)
+
+**Staging**: Automatic deployment on merge to `main` branch
+```bash
+# Create feature branch, make changes, push
+git checkout -b feature/my-feature
+git add .
+git commit -m "feat: add new feature"
+git push origin feature/my-feature
+
+# Create PR and merge to main → triggers staging deployment
+gh pr create --title "Add feature" --body "Description"
+gh pr merge <PR-number> --squash
+```
+
+**Production**: Manual deployment on GitHub release (requires approval)
+```bash
+# Create release tag → triggers production deployment
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+
+gh release create v1.0.0 \
+  --title "Release v1.0.0" \
+  --notes "Production release with features X, Y, Z"
+
+# Approve deployment in GitHub Actions UI
+```
+
+**Automated workflow** includes:
+- ✅ Docker image build and push to Azure Container Registry
+- ✅ Infrastructure deployment/updates via Bicep
+- ✅ Secret population to Azure Key Vault
+- ✅ Container App update with new revision
+- ✅ Health checks and smoke tests
+- ✅ Automatic rollback on failure
+
+**Expected duration**: 8-12 minutes (staging), 10-15 minutes (production with approval)
+
+#### 2. Manual Deployment (Backup/Troubleshooting)
+
+For emergency deployments or when CI/CD is unavailable:
+
+```bash
+# Set environment
+export ENVIRONMENT="staging"  # or "production"
+export RESOURCE_GROUP="docgen-${ENVIRONMENT}-rg"
+export ACR_NAME="docgen${ENVIRONMENT}"
+
+# Build and push Docker image
+az acr login --name "$ACR_NAME"
+docker build --platform linux/amd64 \
+  -t "$ACR_NAME.azurecr.io/docgen-api:$(git rev-parse --short HEAD)" .
+docker push "$ACR_NAME.azurecr.io/docgen-api:$(git rev-parse --short HEAD)"
+
+# Deploy infrastructure (if Bicep changes)
+az deployment group create \
+  --resource-group "$RESOURCE_GROUP" \
+  --template-file infra/main.bicep \
+  --parameters infra/parameters/${ENVIRONMENT}.bicepparam
+
+# Update Container App
+az containerapp update \
+  --name "docgen-${ENVIRONMENT}" \
+  --resource-group "$RESOURCE_GROUP" \
+  --image "$ACR_NAME.azurecr.io/docgen-api:$(git rev-parse --short HEAD)"
+```
+
+### Health Checks
+
+**Liveness probe** (`/healthz`):
+```bash
+curl https://<your-app-url>/healthz
+# Expected: {"status":"ok"}
+```
+
+**Readiness probe** (`/readyz`):
+```bash
+curl https://<your-app-url>/readyz
+# Expected: {"ready":true,"checks":{"jwks":true,"salesforce":true,"keyVault":true}}
+```
+
+### Monitoring & Operations
+
+**Application Insights**: Real-time metrics, traces, and alerts
+- Request rate, duration (P50/P95/P99), failure rate
+- Custom metrics: `docgen_duration_ms`, `queue_depth`, `retries_total`, etc.
+- Dependency tracking: Salesforce API calls, LibreOffice conversions
+- 6 alert rules for operational incidents (see [docs/dashboards.md](docs/dashboards.md))
+
+**Container Logs**:
+```bash
+# View real-time logs
+az containerapp logs show \
+  --name <app-name> \
+  --resource-group <resource-group> \
+  --tail 100 \
+  --follow
+```
+
+**Scaling**:
+- Autoscaling: CPU >70% triggers scale-up (1 → 5 replicas)
+- Manual scaling: See [docs/RUNBOOKS.md](docs/RUNBOOKS.md#runbook-2-scale-up-and-scale-down)
+
+### Rollback Procedures
+
+**Automated rollback**: Triggered automatically on deployment failure (smoke tests, health checks)
+
+**Manual rollback**:
+```bash
+# List revisions
+az containerapp revision list \
+  --name <app-name> \
+  --resource-group <resource-group>
+
+# Activate previous revision
+az containerapp revision activate \
+  --name <app-name> \
+  --resource-group <resource-group> \
+  --revision <previous-revision-name>
+```
+
+### Documentation
+
+**Deployment & Operations**:
+- **[docs/DEPLOY.md](docs/DEPLOY.md)** - Complete deployment guide (1,045 lines)
+- **[docs/PROVISIONING.md](docs/PROVISIONING.md)** - One-time environment setup (543 lines)
+- **[docs/RUNBOOKS.md](docs/RUNBOOKS.md)** - Operational procedures (894 lines)
+  - Rollback, scaling, key rotation, disaster recovery, environment cloning
+- **[docs/dashboards.md](docs/dashboards.md)** - Monitoring & incident response (857 lines)
+  - KQL queries, alert rules, 6 operational runbooks, troubleshooting
+- **[docs/TROUBLESHOOTING-INDEX.md](docs/TROUBLESHOOTING-INDEX.md)** - Quick troubleshooting reference (467 lines)
+
+**Infrastructure as Code**:
+- **[infra/main.bicep](infra/main.bicep)** - Main orchestrator
+- **[infra/modules/](infra/modules/)** - Modular Bicep templates (monitoring, registry, keyvault, environment, app)
+- **[.github/workflows/](github/workflows/)** - CI/CD workflows (deploy-staging.yml, deploy-production.yml)
+
+**Cost Estimates**:
+- **Staging**: ~$80-150/month (1-3 replicas, Basic ACR)
+- **Production**: ~$100-200/month (1-5 replicas, Standard ACR, higher scale)
+- See [docs/PROVISIONING.md](docs/PROVISIONING.md#cost-estimates) for detailed breakdown
+
+---
+
 ## Authentication (T-08)
 
 ### Azure AD JWT Validation
@@ -355,7 +539,7 @@ const pdfBuffer = await convertDocxToPdf(docxBuffer, {
 ```
 
 **Constraints**:
-- **Container Sizing**: 2 vCPU / 4 GB RAM (ACA UK South)
+- **Container Sizing**: 2 vCPU / 4 GB RAM (ACA East US)
 - **Max Concurrent**: 8 jobs (chosen based on LibreOffice CPU/memory usage)
 - **Workdir**: `/tmp` (ephemeral, cleaned up)
 - **LibreOffice**: Installed via `apt-get install -y libreoffice`
@@ -994,7 +1178,7 @@ Generate a PDF or DOCX document from a Salesforce template.
 - **Testing**: Jest + ts-jest + Supertest + Nock
 - **Document Processing**: docx-templates + LibreOffice
 - **Authentication**: Azure AD (inbound), JWT Bearer (outbound to Salesforce)
-- **Hosting**: Azure Container Apps (UK South, 2 vCPU / 4 GB RAM)
+- **Hosting**: Azure Container Apps (East US, 2 vCPU / 4 GB RAM)
 - **Observability**: Azure Application Insights
 
 ## License

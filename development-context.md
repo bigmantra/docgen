@@ -13,7 +13,7 @@ This document gives you everything you need to understand the system before you 
 * **Runtime**: Node.js (TypeScript) + Fastify; **single container** runs API and **internal worker** (poller).
 * **Conversion**: `soffice --headless` (LibreOffice) via **bounded worker pool**.
 * **Container base**: `debian:bookworm-slim`.
-* **Hosting**: **Azure Container Apps (ACA)**, **UK South**, **2 vCPU / 4 GB RAM**.
+* **Hosting**: **Azure Container Apps (ACA)**, **East US**, **2 vCPU / 4 GB RAM**.
 * **Concurrency limit per instance**: **8 doc jobs** concurrently; temp workdir: `/tmp`.
 * **Inbound auth (Salesforce → Node)**: **Azure AD** OAuth2 **client credentials** via **Salesforce Named Credential**.
 * **Outbound auth (Node → Salesforce)**: **JWT Bearer Flow** with an **Integration User**.
@@ -368,7 +368,7 @@ Node receives a **single JSON envelope**. Apex is responsible for collecting and
 ## 11) Deployment & Ops (Azure)
 
 * **Container**: `debian:bookworm-slim`; install `libreoffice`, common fonts; expose `8080`.
-* **ACA (UK South)**: 2 vCPU / 4 GB; minReplicas=1, maxReplicas=5 (autoscale on CPU ≥ 70% or custom `queue_depth`).
+* **ACA (East US)**: 2 vCPU / 4 GB; minReplicas=1, maxReplicas=5 (autoscale on CPU ≥ 70% or custom `queue_depth`).
 * **Ingress**: HTTPS only; **AAD auth** configured (audience matches Node). Optional WAF/App Gateway sits in front.
 * **Secrets**: **Key Vault**; app uses **Managed Identity** to fetch secrets at startup.
 * **Health**: `/healthz` (liveness), `/readyz` (readiness after secrets and external checks).

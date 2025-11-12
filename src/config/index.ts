@@ -1,6 +1,7 @@
 import { AppConfig } from '../types';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { loadSecretsFromKeyVault } from './secrets';
 
 /**
  * Load private key from environment or file
@@ -25,17 +26,29 @@ function loadPrivateKey(): string | undefined {
 }
 
 /**
- * Load configuration from environment variables
+ * Load configuration from environment variables and Azure Key Vault
+ *
+ * In production mode with KEY_VAULT_URI set, secrets are loaded from Azure Key Vault
+ * and override environment variables. In development mode, only environment variables are used.
+ *
+ * This approach:
+ * - Maintains backward compatibility for local development
+ * - Provides secure secret management in production (Azure Container Apps)
+ * - Supports graceful degradation if Key Vault is unavailable
  */
-export function loadConfig(): AppConfig {
-  return {
+export async function loadConfig(): Promise<AppConfig> {
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const keyVaultUri = process.env.KEY_VAULT_URI;
+
+  // Load base configuration from environment variables
+  const config: AppConfig = {
     port: parseInt(process.env.PORT || '8080', 10),
-    nodeEnv: process.env.NODE_ENV || 'development',
+    nodeEnv,
     logLevel: process.env.LOG_LEVEL || 'info',
     sfDomain: process.env.SF_DOMAIN,
     azureTenantId: process.env.AZURE_TENANT_ID,
     clientId: process.env.CLIENT_ID,
-    keyVaultUri: process.env.KEY_VAULT_URI,
+    keyVaultUri,
     imageAllowlist: process.env.IMAGE_ALLOWLIST?.split(',').map((s) => s.trim()),
     // Azure AD JWT validation settings (T-08)
     issuer: process.env.ISSUER,
@@ -68,6 +81,31 @@ export function loadConfig(): AppConfig {
     azureMonitorConnectionString: process.env.AZURE_MONITOR_CONNECTION_STRING,
     enableTelemetry: process.env.ENABLE_TELEMETRY !== 'false', // Enabled by default, can be explicitly disabled
   };
+
+  // In production mode with Key Vault configured, load secrets from Key Vault
+  // Key Vault secrets override environment variables for enhanced security
+  if (nodeEnv === 'production' && keyVaultUri) {
+    const kvSecrets = await loadSecretsFromKeyVault(keyVaultUri);
+
+    // Merge Key Vault secrets into config (KV takes precedence over env vars)
+    if (kvSecrets.sfPrivateKey) {
+      config.sfPrivateKey = kvSecrets.sfPrivateKey;
+    }
+    if (kvSecrets.sfClientId) {
+      config.sfClientId = kvSecrets.sfClientId;
+    }
+    if (kvSecrets.sfUsername) {
+      config.sfUsername = kvSecrets.sfUsername;
+    }
+    if (kvSecrets.sfDomain) {
+      config.sfDomain = kvSecrets.sfDomain;
+    }
+    if (kvSecrets.azureMonitorConnectionString) {
+      config.azureMonitorConnectionString = kvSecrets.azureMonitorConnectionString;
+    }
+  }
+
+  return config;
 }
 
 /**

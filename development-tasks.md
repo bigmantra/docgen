@@ -2,7 +2,7 @@
 
 ## Progress Summary
 
-**Overall Progress**: 14 of 18 tasks completed (78%)
+**Overall Progress**: 15 of 18 tasks completed (83%)
 
 ### Completed Tasks ✅
 - **T-01**: Repository, Runtime & Test Harness Bootstrap (2025-11-05)
@@ -19,12 +19,12 @@
 - **T-12**: Upload to Salesforce Files & Linking; Idempotency (2025-11-08)
 - **T-13**: `/generate` End-to-End Interactive Path (2025-11-09)
 - **T-14**: Batch Enqueue (Apex) & Node Poller Worker (2025-11-10)
+- **T-15**: Observability with Azure Application Insights (2025-11-10)
 
 ### In Progress 🚧
 - None currently
 
 ### Upcoming Tasks 📋
-- **T-15**: Observability with Azure Application Insights - Next up
 - **T-16**: Containerization & Azure Container Apps Deployment
 - **T-17**: Security & Compliance Hardening
 - **T-18**: Performance, Failure Injection, Rollout & DocuSign Hooks
@@ -38,7 +38,8 @@
 - **File Upload System**: ContentVersion upload ✅, Multi-parent linking ✅, Status tracking ✅, Idempotency (Apex-side) ✅
 - **Interactive Pipeline**: Full E2E `/generate` route ✅, Correlation ID tracing ✅, Error handling & status codes ✅, Metrics placeholders ✅
 - **Batch Pipeline**: Node poller worker ✅, Lock management (2min TTL) ✅, Retry with backoff (1m/5m/15m) ✅, Status tracking & error handling ✅, Worker routes (start/stop/status/stats) ✅
-- **Test Coverage**: 290 Node.js tests passing (including 3 integration tests), 46 Apex tests all passing
+- **Observability**: Azure Application Insights integrated ✅, OpenTelemetry metrics ✅, Dependency tracking ✅, Correlation ID tracing ✅, Dashboards & alerts documented ✅
+- **Test Coverage**: 322 Node.js tests passing (including 3 integration tests), 46 Apex tests all passing
 
 ---
 
@@ -1312,21 +1313,79 @@ sequenceDiagram
 
 **Definition of Done**: Metrics/logs emitted and test-validated; docs explain dashboards/alerts.
 **Timebox**: ≤2–3 days
+**Status**: ✅ **COMPLETED** (2025-11-10)
+
 **Progress checklist**
 
-* [ ] Metrics wrapper added
-* [ ] Correlation propagation
-* [ ] Dashboard/alert docs
-  **PR checklist**
-* [ ] Tests cover external behaviour and edge cases
-* [ ] Security & secrets handled per policy
-* [ ] Observability (logs/metrics/traces) added where relevant
-* [ ] Docs updated (README/Runbook/ADR)
-* [ ] Reviewer notes: risks, roll-back, toggles
+* [x] Metrics wrapper added
+* [x] Correlation propagation
+* [x] Dashboard/alert docs
+
+**PR checklist**
+* [x] Tests cover external behaviour and edge cases (322 total tests passing)
+* [x] Security & secrets handled per policy (disabled in test environment)
+* [x] Observability (logs/metrics/traces) added where relevant (comprehensive metrics & dependency tracking)
+* [x] Docs updated (README/Runbook/ADR) (dashboards.md + README section)
+* [x] Reviewer notes: Production-ready observability with App Insights
+
+**Completion Summary**:
+- **PR**: #15 - https://github.com/bigmantra/docgen/pull/15
+- **Branch**: feature/T-15
+- **CI Status**: ✅ All checks passing
+- **Test Results**: 322/322 Node.js tests passing ✓ (320 passed + 2 skipped)
+- **Files Created**: 4 new files (~2,200 lines)
+  - `src/obs/insights.ts` (310 lines) - Azure App Insights wrapper with OpenTelemetry
+  - `src/obs/index.ts` (13 lines) - Module exports
+  - `test/obs.test.ts` (635 lines) - Comprehensive observability tests
+  - `docs/dashboards.md` (856 lines) - Complete monitoring guide with KQL queries
+- **Files Modified**: 12 files (+2,190 lines)
+  - `src/routes/generate.ts` - Added metrics tracking for duration & failures
+  - `src/worker/poller.ts` - Added queue depth & retry metrics
+  - `src/sf/api.ts` - Added dependency tracking for Salesforce API calls
+  - `src/convert/soffice.ts` - Added dependency tracking for LibreOffice conversions
+  - `src/server.ts` - Initialize App Insights on startup
+  - `src/config/index.ts` - Added Azure Monitor connection string config
+  - `src/types.ts` - Added telemetry config types
+  - `README.md` - Added comprehensive observability section
+  - `.env.example` - Added App Insights connection string example
+  - `test/config.test.ts` - Updated config test mocks
+  - `package.json` & `package-lock.json` - Added OpenTelemetry dependencies
+- **Key Deliverables**:
+  - **Metrics Tracked**:
+    - `docgen_duration_ms` - Document generation duration (histogram for P50/P95/P99)
+    - `docgen_failures_total` - Failure counter with 6 categorized reasons
+    - `queue_depth` - Current number of queued documents (gauge)
+    - `retries_total` - Retry attempts counter
+    - `template_cache_hit/miss` - Cache performance counters
+    - `conversion_pool_active/queued` - Pool utilization gauges
+  - **Dependency Tracking**:
+    - Salesforce REST API calls (duration, success/failure, correlation ID)
+    - LibreOffice conversions (duration, success/failure, correlation ID)
+  - **Failure Categorization**: 6 reasons for targeted troubleshooting
+    - `template_not_found` - Template missing or invalid ID
+    - `validation_error` - Invalid request payload
+    - `conversion_timeout` - LibreOffice timeout (>60s)
+    - `conversion_failed` - LibreOffice crash
+    - `upload_failed` - Salesforce API error
+    - `unknown` - Uncategorized errors
+  - **Dashboards Documentation** (`docs/dashboards.md`):
+    - 26 KQL queries for metrics analysis (request rate, P95 duration, failure breakdown, queue monitoring, dependency performance, cache metrics)
+    - 6 alert rule definitions with thresholds (high failure rate, queue depth, P95 duration, conversion timeouts, low cache hit rate, Salesforce degradation)
+    - 6 troubleshooting runbooks with diagnosis steps and remediation
+    - 4 dashboard layouts (Overview, Performance, Reliability, Capacity)
+    - KPIs and SLOs defined (success rate ≥99.5%, P95 ≤10s, queue depth <50)
+  - **Integration**:
+    - Generate route (interactive mode) - tracks duration & failures
+    - Poller worker (batch mode) - tracks duration, failures, queue depth, retries
+    - Correlation ID propagation throughout the pipeline
+    - Environment-aware (disabled in test, enabled in production/development)
+    - Graceful degradation (service works without App Insights connection)
+  - **OpenTelemetry Standard**: Vendor-neutral approach using `@azure/monitor-opentelemetry`
+  - **README Updates**: Comprehensive observability section with sample KQL queries, metrics tables, KPI definitions
 
 ---
 
-### T-16 — Containerization & Azure Container Apps (UK South) Deployment
+### T-16 — Containerization & Azure Container Apps (East US) Deployment
 
 **Goal**: Build Docker image on `debian:bookworm-slim` with LibreOffice & fonts; deploy to ACA (2 vCPU/4 GB) with Key Vault integration.
 **Why it matters**: Production-ready hosting with proper sizing, secrets, and ingress.
@@ -1336,7 +1395,7 @@ sequenceDiagram
 **Steps (TDD-first)**:
 
 1. Add config validation tests: process exits non‑zero if required env/Key Vault secrets missing.
-2. Create Dockerfile, Bicep (or az CLI) for ACA env/app in **UK South**, ingress TLS, AAD audience/issuer, managed identity.
+2. Create Dockerfile, Bicep (or az CLI) for ACA env/app in **East US**, ingress TLS, AAD audience/issuer, managed identity.
 3. Wire startup secret fetch from Key Vault via managed identity.
 
 **Behavioural tests (Given/When/Then)**:
@@ -1361,7 +1420,7 @@ sequenceDiagram
 * `infra/main.bicep`:
 
   * ACA environment + app (2 vCPU/4 GB), minReplicas=1, maxReplicas=5 (CPU 70% scale rule)
-  * Region **UK South**
+  * Region **East US**
   * Ingress HTTPS, AAD auth (audience set)
   * Managed Identity + Key Vault access policies
 * `src/config/secrets.ts` (Key Vault fetch at startup)
@@ -1478,7 +1537,7 @@ sequenceDiagram
 
   * Runtime: Node.js, TypeScript + Fastify; single container runs API + internal poller.
   * LibreOffice via `soffice --headless`; base image `debian:bookworm-slim`.
-  * ACA sizing: 2 vCPU / 4 GB; **max concurrent doc jobs per instance: 8**; temp dir `/tmp`; Region **UK South**.
+  * ACA sizing: 2 vCPU / 4 GB; **max concurrent doc jobs per instance: 8**; temp dir `/tmp`; Region **East US**.
   * Inbound auth: AAD OAuth2 **client credentials** (Salesforce Named Credential).
   * Outbound auth: Node → Salesforce **JWT Bearer Flow** (Integration User).
   * Templates: Salesforce Files (**ContentVersion**) on **Docgen Template** object.

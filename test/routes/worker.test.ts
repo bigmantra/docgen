@@ -10,35 +10,40 @@ import type { FastifyInstance } from 'fastify';
 // Load environment variables
 dotenvConfig();
 
-// Check if we have Salesforce credentials
-const appConfig = loadConfig();
-const hasCredentials = !!(
-  appConfig.sfDomain &&
-  appConfig.sfUsername &&
-  appConfig.sfClientId &&
-  appConfig.sfPrivateKey
-);
+// Config will be loaded in beforeAll
+let appConfig: Awaited<ReturnType<typeof loadConfig>>;
+let hasCredentials = false;
+let sfDomain: string | undefined;
+let baseUrl: string;
 
-// Skip tests if credentials are not available
-const describeWithAuth = hasCredentials ? describe : describe.skip;
+describe('Worker Routes', () => {
+  let app: FastifyInstance;
+  let request: ReturnType<typeof supertest>;
 
-if (!hasCredentials) {
-  console.log(`
+  beforeAll(async () => {
+    // Load config first
+    appConfig = await loadConfig();
+    hasCredentials = !!(
+      appConfig.sfDomain &&
+      appConfig.sfUsername &&
+      appConfig.sfClientId &&
+      appConfig.sfPrivateKey
+    );
+
+    if (!hasCredentials) {
+      console.log(`
 ================================================================================
 SKIPPING WORKER ROUTE TESTS: Missing Salesforce credentials.
 
 To run these tests locally, create a .env file with Salesforce credentials.
 ================================================================================
-  `);
-}
+      `);
+      return;
+    }
 
-describeWithAuth('Worker Routes', () => {
-  let app: FastifyInstance;
-  let request: ReturnType<typeof supertest>;
-  const sfDomain = appConfig.sfDomain;
-  const baseUrl = `https://${sfDomain}`;
+    sfDomain = appConfig.sfDomain;
+    baseUrl = `https://${sfDomain}`;
 
-  beforeAll(async () => {
     // Initialize real Salesforce auth
     createSalesforceAuth({
       sfDomain: appConfig.sfDomain!,
@@ -57,6 +62,10 @@ describeWithAuth('Worker Routes', () => {
   });
 
   beforeEach(async () => {
+    if (!hasCredentials) {
+      return;
+    }
+
     nock.cleanAll();
 
     // Note: We don't mock /services/oauth2/token - auth is real!
