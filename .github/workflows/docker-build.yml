@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
-      image_uri: ${{ steps.build-push.outputs.image_uri }}
+      image_uri: ${{ steps.set-output.outputs.image_uri }}
       image_tag: ${{ inputs.image_tag }}
 
     steps:
