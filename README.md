@@ -113,12 +113,18 @@ sf apex run test --test-level RunLocalTests --result-format human
 - `scripts/delete-scratch-org.sh [alias]` - Delete scratch org
 
 **Salesforce Components**:
+- **Custom App**: `Docgen` - Lightning app with custom tabs for templates, generated documents, and test page
+  - `Docgen Templates` tab - List view for Docgen_Template__c
+  - `Generated Documents` tab - List view for Generated_Document__c
+  - `Docgen Test Page` tab - App page for e2e testing (test metadata only)
 - `Docgen_Template__c` - Template configuration object (7 fields)
 - `Generated_Document__c` - Document generation tracking object (15 fields)
 - `DocgenDataProvider` - Interface for pluggable data collection strategies
 - `StandardSOQLProvider` - Default SOQL provider with locale-aware formatting
 - `DocgenEnvelopeService` - JSON envelope builder with SHA-256 RequestHash
 - `DocgenController` - Interactive document generation controller (calls Node API via Named Credential)
+- `docgenButton` - LWC component for interactive PDF/DOCX generation (deployable to Record/App/Home pages)
+- `docgenTestPage` - LWC wrapper component for e2e testing on App pages (reads recordId from URL parameters)
 - Apex test classes: 6 test classes with 44 test methods (all passing)
 
 ### Named Credential Setup
@@ -1023,7 +1029,7 @@ npm run test:lwc:coverage
 
 ### E2E Tests (Playwright)
 
-End-to-end tests verify the `docgenButton` LWC component in a real Salesforce environment (UI-only, no backend required).
+End-to-end tests verify the `docgenButton` LWC component in a real Salesforce environment (UI-only, no backend required). Tests use the **Docgen Test Page** custom App page which provides Account context via URL parameters.
 
 ```bash
 # Step 1: Create scratch org and deploy metadata
@@ -1048,12 +1054,13 @@ npm run test:e2e:debug    # Debug with Playwright Inspector
 ```
 
 **What's tested**:
-- ✅ Component rendering and visibility
+- ✅ Component rendering and visibility on custom App page
 - ✅ Button state management (enabled/disabled)
 - ✅ Spinner during processing
 - ✅ Success/error toast notifications
 - ✅ Salesforce record creation (Generated_Document__c)
-- ✅ Account page loading
+- ✅ Docgen Test Page loads with Account details
+- ✅ Generated Documents table displays related records
 
 **See also**:
 - [E2E Testing Guide](./e2e/README.md) - Setup, running tests, troubleshooting

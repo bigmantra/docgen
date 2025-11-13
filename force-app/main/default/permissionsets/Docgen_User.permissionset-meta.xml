@@ -124,4 +124,24 @@
         <field>Docgen_Template__c.PrimaryParent__c</field>
         <readable>true</readable>
     </fieldPermissions>
+
+    <!-- Application Visibility -->
+    <applicationVisibilities>
+        <application>Docgen</application>
+        <visible>true</visible>
+    </applicationVisibilities>
+
+    <!-- Custom Tab Visibility -->
+    <tabSettings>
+        <tab>Docgen_Template__c</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    <tabSettings>
+        <tab>Generated_Document__c</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    <tabSettings>
+        <tab>Docgen_Test_Page</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
 </PermissionSet>

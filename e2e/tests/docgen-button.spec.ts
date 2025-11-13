@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures/salesforce.fixture';
-import { AccountRecordPage } from '../pages/AccountRecordPage';
+import { DocgenTestPage } from '../pages/DocgenTestPage';
 import { DocgenButtonComponent } from '../pages/DocgenButtonComponent';
 import { querySalesforce, executeAnonymousApex, waitForSalesforceRecord } from '../utils/scratch-org';
 
@@ -7,15 +7,15 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
   // Note: Test mode is enabled automatically in the salesforce fixture
   // See salesforce.fixture.ts:enableTestMode()
 
-  test('renders button on Account record page with correct label', async ({
+  test('renders button on Docgen test page with correct label', async ({
     salesforce,
   }) => {
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    // Navigate to test Account
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    // Navigate to Docgen test page with Account recordId
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // Verify component is visible
     const isVisible = await button.isVisible();
@@ -27,11 +27,11 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
   });
 
   test('button is enabled initially', async ({ salesforce }) => {
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // Verify button is enabled
     const isEnabled = await button.isButtonEnabled();
@@ -39,11 +39,11 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
   });
 
   test('clicking button shows spinner', async ({ salesforce }) => {
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // Click button
     await button.click();
@@ -54,11 +54,11 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
   });
 
   test('clicking button disables button', async ({ salesforce }) => {
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // Click button
     await button.click();
@@ -70,11 +70,11 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
 
 
   test('spinner disappears after completion', async ({ salesforce }) => {
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // Click button
     await button.click();
@@ -88,11 +88,11 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
   });
 
   test('button re-enables after completion', async ({ salesforce }) => {
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // Click button
     await button.click();
@@ -108,7 +108,7 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
   test('creates Generated_Document__c record with Status=PROCESSING', async ({
     salesforce,
   }) => {
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
     console.log(`\n${'='.repeat(60)}`);
@@ -117,10 +117,10 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
     console.log(`Test Account ID: ${salesforce.testData.accountId}`);
     console.log(`Test Template ID: ${salesforce.testData.templateId}`);
 
-    console.log('\nNavigating to Account page...');
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
-    console.log('✓ Account page loaded');
+    console.log('\nNavigating to Docgen test page...');
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
+    console.log('✓ Docgen test page loaded');
 
     // Verify button is visible before clicking
     const isVisible = await button.isVisible();
@@ -193,11 +193,11 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
   test.skip('handles missing template gracefully', async ({ salesforce }) => {
     // Skip: Requires modifying component config at runtime
     // or deploying a separate flexipage with invalid templateId
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // Click button (template ID is invalid)
     await button.click();
@@ -213,11 +213,11 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
     // 1. Adding HttpCalloutMock to Salesforce org
     // 2. Or setting up a mock endpoint
     // 3. Or modifying DocgenController with test mode flag
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // Click button
     await button.click();
@@ -232,11 +232,11 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
   }) => {
     // Skip: Requires backend to fully complete first request
     // This tests the idempotency check in DocgenController
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
     // First click
     await button.click();
@@ -261,14 +261,15 @@ test.describe('docgenButton Component - UI Only Tests (No Backend)', () => {
     expect(secondDocs.length).toBe(firstDocCount);
   });
 
-  test('Account page loads successfully', async ({ salesforce }) => {
-    const accountPage = new AccountRecordPage(salesforce.authenticatedPage);
+  test('Docgen test page loads successfully', async ({ salesforce }) => {
+    const testPage = new DocgenTestPage(salesforce.authenticatedPage);
 
-    await accountPage.goto(salesforce.testData.accountId);
-    await accountPage.waitForLoad();
+    await testPage.goto(salesforce.testData.accountId);
+    await testPage.waitForAccountDetailsLoaded();
 
-    const isLoaded = await accountPage.isLoaded();
-    expect(isLoaded).toBe(true);
+    // Verify account details are visible
+    const accountCard = testPage.getAccountDetailsCard();
+    await expect(accountCard).toBeVisible();
 
   });
 });

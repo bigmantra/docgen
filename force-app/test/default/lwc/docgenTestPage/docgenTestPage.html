@@ -1,0 +1,74 @@
+<template>
+    <lightning-card title="Docgen E2E Test Page" icon-name="custom:custom78">
+        <!-- Error message if no recordId provided -->
+        <template if:true={showError}>
+            <div class="slds-m-around_medium slds-text-color_error">
+                <lightning-icon icon-name="utility:error" size="small" variant="error" class="slds-m-right_x-small"></lightning-icon>
+                <strong>Error:</strong> No Account record ID provided. Please add c__recordId parameter to the URL.
+            </div>
+        </template>
+
+        <!-- Main content when recordId is available -->
+        <template if:false={showError}>
+            <!-- Account Details Section -->
+            <div class="slds-m-around_medium">
+                <lightning-card title="Account Details" icon-name="standard:account">
+                    <div class="slds-p-horizontal_medium">
+                        <lightning-record-view-form record-id={recordId} object-api-name="Account">
+                            <div class="slds-grid slds-wrap">
+                                <div class="slds-col slds-size_1-of-2 slds-p-around_small">
+                                    <lightning-output-field field-name="Name"></lightning-output-field>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2 slds-p-around_small">
+                                    <lightning-output-field field-name="Type"></lightning-output-field>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2 slds-p-around_small">
+                                    <lightning-output-field field-name="Industry"></lightning-output-field>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2 slds-p-around_small">
+                                    <lightning-output-field field-name="AnnualRevenue"></lightning-output-field>
+                                </div>
+                            </div>
+                        </lightning-record-view-form>
+                    </div>
+                </lightning-card>
+            </div>
+
+            <!-- Docgen Button Section -->
+            <div class="slds-m-around_medium">
+                <lightning-card title="Document Generation" icon-name="action:new_note">
+                    <div class="slds-p-around_medium">
+                        <c-docgen-button
+                            record-id={recordId}
+                            template-name="E2E_Test_Template"
+                            output-format="PDF"
+                            button-label="Generate Test Document"
+                            success-message="Test document generated successfully!">
+                        </c-docgen-button>
+                    </div>
+                </lightning-card>
+            </div>
+
+            <!-- Generated Documents Section -->
+            <div class="slds-m-around_medium">
+                <lightning-card title="Generated Documents" icon-name="standard:file">
+                    <div class="slds-p-around_medium">
+                        <template if:true={generatedDocuments}>
+                            <lightning-datatable
+                                key-field="Id"
+                                data={generatedDocuments}
+                                columns={columns}
+                                hide-checkbox-column>
+                            </lightning-datatable>
+                        </template>
+                        <template if:false={generatedDocuments}>
+                            <div class="slds-text-align_center slds-p-around_medium slds-text-color_weak">
+                                No generated documents found for this account.
+                            </div>
+                        </template>
+                    </div>
+                </lightning-card>
+            </div>
+        </template>
+    </lightning-card>
+</template>

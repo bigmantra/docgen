@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    DEPRECATED: This Record Page is no longer used as of 2025-11-13.
+    E2E tests now use the Docgen_Test_Page App Page instead.
+    Kept for reference only. Can be safely deleted after validation.
+-->
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
     <flexiPageRegions>
         <itemInstances>
