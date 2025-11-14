@@ -201,6 +201,31 @@ System.debug('Download URL: ' + downloadUrl);
    - **Remote Site URL**: Your Node API base URL
    - **Active**: ✅ Checked
 
+### Issue: 403 Forbidden / Token Version Mismatch
+
+**Symptoms**:
+- 403 errors when calling Node API from Salesforce
+- Authentication fails despite correct client ID and secret
+- Token validation errors in Node API logs
+
+**Cause**: Named Credential configured with Azure AD v1.0 endpoint instead of v2.0
+
+**Solution**:
+1. Update External Credential Token Endpoint URL from:
+   ```
+   https://login.microsoftonline.com/<tenant-id>/oauth2/token
+   ```
+   to:
+   ```
+   https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token
+   ```
+2. Verify the metadata reflects v2.0:
+   - Check `force-app/main/default/externalCredentials/Docgen_AAD_Credential.externalCredential-meta.xml`
+   - Line 20 should contain `/oauth2/v2.0/token`
+3. Redeploy the External Credential metadata to production
+
+**Why this matters**: Azure AD v1.0 tokens use issuer `https://sts.windows.net/<tenant-id>/` while v2.0 tokens use `https://login.microsoftonline.com/<tenant-id>/v2.0`. The Node API validates v2.0 tokens, so using v1.0 endpoint causes authentication failures.
+
 ### Issue: "Invalid client" error from Azure AD
 
 **Causes**:

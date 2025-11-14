@@ -25,6 +25,7 @@ Quick reference guide to troubleshooting resources across all documentation. Use
 | **Slow performance** | Check dependency latency, review cache hit rate | [dashboards.md](./dashboards.md#runbook-3-slow-performance-p95-duration-exceeds-slo) |
 | **Conversion timeouts** | Check LibreOffice pool, review document complexity | [dashboards.md](./dashboards.md#runbook-4-conversion-timeouts) |
 | **Salesforce auth failed** | Verify JWT key, check Connected App | [RUNBOOKS.md](./RUNBOOKS.md#runbook-7-database-and-salesforce-maintenance), [PROVISIONING.md](./PROVISIONING.md#troubleshooting) |
+| **Azure AD auth 403 error** | Update Named Credential to use v2.0 token endpoint | [named-credential-setup.md](./named-credential-setup.md#troubleshooting) |
 | **Key Vault access denied** | Assign Key Vault Secrets Officer role | [PROVISIONING.md](./PROVISIONING.md#issue-key-vault-access-denied) |
 | **Rollback needed** | Use automated rollback or manual procedure | [DEPLOY.md](./DEPLOY.md#rollback-procedures), [RUNBOOKS.md](./RUNBOOKS.md#runbook-1-manual-rollback-procedure) |
 
