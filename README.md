@@ -113,12 +113,18 @@ sf apex run test --test-level RunLocalTests --result-format human
 - `scripts/delete-scratch-org.sh [alias]` - Delete scratch org
 
 **Salesforce Components**:
+- **Custom App**: `Docgen` - Lightning app with custom tabs for templates, generated documents, and test page
+  - `Docgen Templates` tab - List view for Docgen_Template__c
+  - `Generated Documents` tab - List view for Generated_Document__c
+  - `Docgen Test Page` tab - App page for e2e testing (test metadata only)
 - `Docgen_Template__c` - Template configuration object (7 fields)
 - `Generated_Document__c` - Document generation tracking object (15 fields)
 - `DocgenDataProvider` - Interface for pluggable data collection strategies
 - `StandardSOQLProvider` - Default SOQL provider with locale-aware formatting
 - `DocgenEnvelopeService` - JSON envelope builder with SHA-256 RequestHash
 - `DocgenController` - Interactive document generation controller (calls Node API via Named Credential)
+- `docgenButton` - LWC component for interactive PDF/DOCX generation (deployable to Record/App/Home pages)
+- `docgenTestPage` - LWC wrapper component for e2e testing on App pages (reads recordId from URL parameters)
 - Apex test classes: 6 test classes with 44 test methods (all passing)
 
 ### Named Credential Setup
@@ -1023,14 +1029,22 @@ npm run test:lwc:coverage
 
 ### E2E Tests (Playwright)
 
-End-to-end tests verify the `docgenButton` LWC component in a real Salesforce environment (UI-only, no backend required).
+End-to-end tests verify the complete document generation flow with a real backend and Salesforce scratch org. Tests interact with the LWC component, trigger backend processing, and validate file uploads.
 
+#### Running E2E Tests Locally
+
+**Prerequisites**:
+- Azure CLI authenticated (`az login`)
+- Salesforce CLI authenticated to Dev Hub
+- Scratch org created and set as default
+
+**Quick Start**:
 ```bash
 # Step 1: Create scratch org and deploy metadata
 npm run e2e:setup
 
-# Step 2: Run Playwright E2E tests
-npm run test:e2e
+# Step 2: Configure CI backend + run tests (recommended)
+npm run test:e2e:local
 
 # Step 3: View test results
 npm run test:e2e:report
@@ -1039,21 +1053,45 @@ npm run test:e2e:report
 npm run e2e:teardown
 ```
 
+**What `test:e2e:local` does**:
+1. Extracts SFDX-AUTH-URL from your local scratch org
+2. Updates the CI backend's Key Vault with your org's credentials
+3. Restarts the CI backend to load new credentials
+4. Waits for backend health check to pass
+5. Runs Playwright e2e tests against the configured backend
+
+**Manual configuration** (if needed):
+```bash
+# Configure CI backend separately
+./scripts/configure-ci-backend-for-local.sh
+
+# Then run tests
+npm run test:e2e
+```
+
 **Available test modes**:
 ```bash
-npm run test:e2e          # Headless (default)
+npm run test:e2e:local    # Configure backend + run (recommended for local)
+npm run test:e2e          # Headless (backend must be configured first)
 npm run test:e2e:headed   # Watch browser execute
 npm run test:e2e:ui       # Interactive mode
 npm run test:e2e:debug    # Debug with Playwright Inspector
 ```
 
+**Important Notes**:
+- 🔄 **Shared Backend**: The CI backend (`docgen-ci`) is shared between local and CI testing
+- ⚠️ **Reconfigure Per Org**: Run `test:e2e:local` each time you create a new scratch org
+- ⏱️ **Backend Restart**: Configuration script waits ~2 minutes for backend to restart
+- 🔐 **Azure Access**: You must have Contributor access to `docgen-ci-rg` resource group
+
 **What's tested**:
-- ✅ Component rendering and visibility
-- ✅ Button state management (enabled/disabled)
-- ✅ Spinner during processing
-- ✅ Success/error toast notifications
-- ✅ Salesforce record creation (Generated_Document__c)
-- ✅ Account page loading
+- ✅ Complete PDF generation flow (LWC → Apex → Backend → Salesforce Files)
+- ✅ Template download from ContentVersion
+- ✅ DOCX template merging with data
+- ✅ PDF conversion via LibreOffice
+- ✅ File upload and ContentDocumentLink creation
+- ✅ Generated_Document__c status tracking
+- ✅ Error handling and toast notifications
 
 **See also**:
 - [E2E Testing Guide](./e2e/README.md) - Setup, running tests, troubleshooting

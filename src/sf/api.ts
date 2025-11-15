@@ -83,7 +83,17 @@ export class SalesforceApi {
         headers['x-correlation-id'] = options.correlationId;
       }
 
-      logger.debug({ url, attempt, correlationId: options?.correlationId }, 'Downloading binary from Salesforce');
+      logger.info(
+        {
+          url,
+          baseUrl: this.baseUrl,
+          path,
+          attempt,
+          correlationId: options?.correlationId,
+          tokenPrefix: token.substring(0, 20) + '...'
+        },
+        'Downloading binary from Salesforce'
+      );
 
       const response = await axios({
         method: 'GET',
@@ -115,7 +125,7 @@ export class SalesforceApi {
     attempt: number,
     hasRefreshedToken: boolean
   ): Promise<Buffer> {
-    const isAxiosError = (err: unknown): err is { response?: { status: number; data: any } } => {
+    const isAxiosError = (err: unknown): err is { response?: { status: number; data: any; headers?: any } } => {
       return typeof err === 'object' && err !== null && 'response' in err;
     };
 
@@ -134,6 +144,21 @@ export class SalesforceApi {
     }
 
     const status = error.response.status;
+    const errorData = error.response.data;
+    const errorHeaders = error.response.headers;
+
+    // Log detailed error information
+    logger.error(
+      {
+        status,
+        path,
+        baseUrl: this.baseUrl,
+        errorData: errorData ? (typeof errorData === 'string' ? errorData : JSON.stringify(errorData)) : 'no data',
+        errorHeaders,
+        correlationId: options?.correlationId
+      },
+      'Salesforce binary download error - detailed info'
+    );
 
     // Handle 401 - refresh token and retry
     if (status === 401 && !hasRefreshedToken) {
@@ -153,8 +178,30 @@ export class SalesforceApi {
       return this.downloadBinary(path, options, attempt + 1, hasRefreshedToken);
     }
 
-    logger.error({ status, correlationId: options?.correlationId }, 'Binary download failed');
-    throw new Error(`Failed to download binary from Salesforce: ${status}`);
+    // Parse Salesforce error message if available
+    let sfErrorMessage = '';
+    if (errorData) {
+      try {
+        if (typeof errorData === 'string') {
+          sfErrorMessage = errorData;
+        } else if (Array.isArray(errorData) && errorData.length > 0) {
+          // Salesforce often returns errors as array: [{message: "...", errorCode: "..."}]
+          sfErrorMessage = errorData.map((e: any) => `${e.errorCode}: ${e.message}`).join('; ');
+        } else if (typeof errorData === 'object' && errorData.message) {
+          sfErrorMessage = errorData.message;
+        } else {
+          sfErrorMessage = JSON.stringify(errorData);
+        }
+      } catch (e) {
+        sfErrorMessage = 'Unable to parse error response';
+      }
+    }
+
+    logger.error(
+      { status, path, sfErrorMessage, correlationId: options?.correlationId },
+      'Binary download failed'
+    );
+    throw new Error(`Failed to download binary from Salesforce: ${status}${sfErrorMessage ? ` - ${sfErrorMessage}` : ''}`);
   }
 
   /**

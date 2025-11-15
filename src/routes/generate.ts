@@ -145,7 +145,7 @@ async function generateHandler(
     if (!sfAuth) {
       throw new Error('Salesforce authentication not configured');
     }
-    const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+    const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
     const templateService = new TemplateService(sfApi);
 
     // Step 1: Fetch template from Salesforce (with caching)
@@ -321,7 +321,7 @@ async function generateHandler(
         if (!sfAuth) {
           throw new Error('Salesforce authentication not configured');
         }
-        const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+        const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
 
         await sfApi.patch(
           `/services/data/v59.0/sobjects/Generated_Document__c/${request.body.generatedDocumentId}`,

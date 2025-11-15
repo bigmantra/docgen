@@ -21,16 +21,28 @@ export interface DecodedToken {
 
 export class AADJWTVerifier {
   private jwksClient: JwksClient;
-  private issuer: string;
+  private validIssuers: [string, ...string[]];
   private audience: string;
+  private tenantId: string;
 
   constructor(config: {
     jwksUri: string;
     issuer: string;
     audience: string;
   }) {
-    this.issuer = config.issuer;
     this.audience = config.audience;
+
+    // Extract tenant ID from issuer URL
+    const tenantMatch = config.issuer.match(/login\.microsoftonline\.com\/([^\/]+)/);
+    this.tenantId = tenantMatch ? tenantMatch[1] : '';
+
+    // Support both v1.0 and v2.0 token formats
+    // Azure AD can issue v1.0 tokens even when using v2.0 endpoint
+    this.validIssuers = [
+      `https://login.microsoftonline.com/${this.tenantId}/v2.0`, // v2.0 format
+      `https://login.microsoftonline.com/${this.tenantId}/`,     // v2.0 without trailing path
+      `https://sts.windows.net/${this.tenantId}/`,               // v1.0 format
+    ];
 
     // Configure JWKS client with caching
     this.jwksClient = jwksClient({
@@ -103,16 +115,16 @@ export class AADJWTVerifier {
       // Get the signing key from JWKS (async operation)
       this.getSigningKey(kid)
         .then((signingKey) => {
-          // Verify the token
+          // Verify the token with multiple valid issuers
           jwt.verify(
             token,
             signingKey,
             {
               algorithms: ['RS256'],
-              issuer: this.issuer,
+              issuer: this.validIssuers, // Accept both v1.0 and v2.0 issuers
               audience: this.audience,
             },
-            (err, decoded) => {
+            (err: jwt.VerifyErrors | null, decoded: string | jwt.JwtPayload | undefined) => {
               if (err) {
                 if (err.name === 'TokenExpiredError') {
                   reject(new Error('Token has expired'));
@@ -122,7 +134,8 @@ export class AADJWTVerifier {
                   if (err.message.includes('audience')) {
                     reject(new Error(`Invalid audience: expected ${this.audience}`));
                   } else if (err.message.includes('issuer')) {
-                    reject(new Error(`Invalid issuer: expected ${this.issuer}`));
+                    // Include valid issuers in error message for debugging
+                    reject(new Error(`Invalid issuer: expected one of ${this.validIssuers.join(', ')}`));
                   } else if (err.message.includes('signature')) {
                     reject(new Error('Invalid token signature'));
                   } else {

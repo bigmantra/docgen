@@ -6,9 +6,15 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
+  deploy-ci-backend:
+    name: Deploy CI Backend
+    uses: ./.github/workflows/deploy-ci-backend.yml
+    secrets: inherit
+
   e2e-tests:
-    name: Playwright E2E Tests
+    name: Playwright E2E Tests with Real Backend
     runs-on: ubuntu-latest
+    needs: deploy-ci-backend
     timeout-minutes: 30
 
     steps:
@@ -58,17 +64,34 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy main metadata
+      - name: Deploy Salesforce metadata
         run: |
-          sf project deploy start \
-            --source-dir force-app/main \
-            --wait 10
+          sf project deploy start --source-dir force-app --wait 10
+          echo "✅ Metadata deployed (includes Named Credential with CI backend URL)"
 
-      - name: Deploy test metadata
+      - name: Configure External Credential with AAD secrets
+        id: apex-config
+        continue-on-error: true
+        env:
+          AAD_CLIENT_ID: ${{ secrets.AAD_CLIENT_ID }}
+          AAD_CLIENT_SECRET: ${{ secrets.AAD_CLIENT_SECRET }}
         run: |
-          sf project deploy start \
-            --source-dir force-app/test \
-            --wait 10
+          echo "Configuring External Credential with AAD client credentials via Apex..."
+
+          # Replace placeholders in template and create temporary Apex script
+          sed -e "s|{{CLIENT_ID}}|$AAD_CLIENT_ID|g" \
+              -e "s|{{CLIENT_SECRET}}|$AAD_CLIENT_SECRET|g" \
+              scripts/ConfigureExternalCredential.apex > /tmp/configure-cred.apex
+
+          # Execute Apex script
+          sf apex run --file /tmp/configure-cred.apex
+
+          if [ $? -eq 0 ]; then
+            echo "✅ External Credential configured successfully via Apex ConnectApi"
+          else
+            echo "⚠️  Apex configuration failed to set credentials"
+            exit 1
+          fi
 
       - name: Assign permission set
         run: |
@@ -92,10 +115,53 @@ jobs:
           echo "Instance URL: $INSTANCE_URL"
           echo "Username: $USERNAME"
 
+      - name: Verify CI backend is healthy
+        run: |
+          BACKEND_URL="${{ needs.deploy-ci-backend.outputs.backend_url }}"
+          echo "Verifying CI backend health at: ${BACKEND_URL}/readyz"
+
+          MAX_ATTEMPTS=20
+          ATTEMPT=0
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Checking ${BACKEND_URL}/readyz"
+
+            # Get HTTP status code
+            HTTP_CODE=$(curl -s -o /tmp/readyz-response.json -w "%{http_code}" "${BACKEND_URL}/readyz")
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Backend responded with HTTP 200"
+
+              # Verify JSON response shows ready: true
+              if jq -e '.ready == true' /tmp/readyz-response.json > /dev/null 2>&1; then
+                echo "✅ CI backend is healthy and ready (all dependencies OK)"
+                cat /tmp/readyz-response.json | jq '.'
+                exit 0
+              else
+                echo "⚠️  Backend returned 200 but reports not ready:"
+                cat /tmp/readyz-response.json | jq '.'
+              fi
+            else
+              echo "Backend returned HTTP $HTTP_CODE (expected 200)"
+            fi
+
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "Retrying in 6 seconds..."
+              sleep 6
+            fi
+          done
+
+          echo "❌ CI backend failed health check after $MAX_ATTEMPTS attempts (2 minutes)"
+          echo "Last response:"
+          cat /tmp/readyz-response.json 2>/dev/null || echo "No response captured"
+          exit 1
+
       - name: Run Playwright E2E tests
         run: npm run test:e2e
         env:
           CI: true
+          BACKEND_URL: ${{ needs.deploy-ci-backend.outputs.backend_url }}
 
       - name: Upload Playwright report
         if: always()

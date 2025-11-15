@@ -24,8 +24,9 @@ targetScope = 'resourceGroup'
 // Parameters
 // ============================================================================
 
-@description('Environment name (e.g., staging, production)')
+@description('Environment name (e.g., ci, staging, production)')
 @allowed([
+  'ci'
   'staging'
   'production'
 ])
@@ -98,7 +99,8 @@ module monitoring './modules/monitoring.bicep' = {
 // Module 2: Azure Container Registry
 // ============================================================================
 
-module registry './modules/registry.bicep' = {
+// For CI environment, reference existing staging ACR instead of creating new one
+module registry './modules/registry.bicep' = if (environment != 'ci') {
   name: 'registry-deployment'
   params: {
     acrName: acrName
@@ -106,6 +108,12 @@ module registry './modules/registry.bicep' = {
     sku: acrSku
     tags: tags
   }
+}
+
+// Reference existing ACR for CI environment
+resource existingAcr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = if (environment == 'ci') {
+  name: acrName
+  scope: resourceGroup('docgen-staging-rg')
 }
 
 // ============================================================================
@@ -148,8 +156,8 @@ module containerApp './modules/app.bicep' = {
     appName: appName
     location: location
     environmentId: containerEnv.outputs.environmentId
-    acrLoginServer: registry.outputs.acrLoginServer
-    acrId: registry.outputs.acrId
+    acrLoginServer: environment == 'ci' ? existingAcr.properties.loginServer : registry.outputs.acrLoginServer
+    acrId: environment == 'ci' ? existingAcr.id : registry.outputs.acrId
     imageTag: imageTag
     keyVaultUri: keyVault.outputs.keyVaultUri
     keyVaultId: keyVault.outputs.keyVaultId
@@ -180,10 +188,10 @@ output keyVaultUri string = keyVault.outputs.keyVaultUri
 output keyVaultName string = keyVault.outputs.keyVaultName
 
 @description('Container Registry login server')
-output acrLoginServer string = registry.outputs.acrLoginServer
+output acrLoginServer string = environment == 'ci' ? existingAcr.properties.loginServer : registry.outputs.acrLoginServer
 
 @description('Container Registry name')
-output acrName string = registry.outputs.acrName
+output acrName string = environment == 'ci' ? existingAcr.name : registry.outputs.acrName
 
 @description('Application Insights connection string')
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
