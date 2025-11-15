@@ -438,7 +438,7 @@ async function createTestData(orgInfo: ScratchOrgInfo): Promise<TestData> {
       Name: templateName,
       DataSource__c: 'SOQL',
       TemplateContentVersionId__c: contentVersionId,
-      SOQL__c: `SELECT Id, Name, BillingCity FROM Account WHERE Id = :recordId`,
+      SOQL__c: `SELECT Id, Name, BillingCity, CreatedDate FROM Account WHERE Id = :recordId`,
       StoreMergedDocx__c: false,
       ReturnDocxToBrowser__c: false,
     });
