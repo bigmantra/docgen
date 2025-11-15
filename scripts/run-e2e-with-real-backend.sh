@@ -15,7 +15,7 @@
 #   1. Configures CI backend to point to your scratch org
 #   2. Deploys test metadata to scratch org
 #   3. Configures External Credential in scratch org
-#   4. Runs E2E tests with TEST_MODE_DISABLED=true
+#   4. Runs E2E tests with real backend
 #
 # Prerequisites:
 #   - CI backend already provisioned (run once):
@@ -133,14 +133,12 @@ run_e2e_tests() {
     log_info "  Scratch Org: $SCRATCH_ORG_ALIAS"
     log_info "  Username: $SF_USERNAME"
     log_info "  Backend URL: $BACKEND_URL"
-    log_info "  Test Mode: DISABLED (real HTTP callouts)"
 
     # Run tests
-    export TEST_MODE_DISABLED=true
     export SF_USERNAME="$SF_USERNAME"
     export BACKEND_URL="$BACKEND_URL"
 
-    npm run test:e2e -- -g "generates PDF successfully with real backend"
+    npm run test:e2e -- -g "generates PDF successfully"
 
     log_success "E2E tests completed!"
 }
@@ -156,10 +154,8 @@ print_summary() {
     echo "Configuration:"
     echo "  Scratch Org: $SCRATCH_ORG_ALIAS"
     echo "  Backend URL: $BACKEND_URL"
-    echo "  Test Mode: DISABLED (real backend)"
     echo ""
     echo "To run tests again:"
-    echo "  export TEST_MODE_DISABLED=true"
     echo "  export BACKEND_URL=$BACKEND_URL"
     echo "  npm run test:e2e"
     echo ""

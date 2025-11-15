@@ -162,7 +162,6 @@ jobs:
         env:
           CI: true
           BACKEND_URL: ${{ needs.deploy-ci-backend.outputs.backend_url }}
-          TEST_MODE_DISABLED: true
 
       - name: Upload Playwright report
         if: always()
