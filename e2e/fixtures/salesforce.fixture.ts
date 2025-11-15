@@ -183,19 +183,23 @@ async function enableTestMode(): Promise<void> {
 async function configureNamedCredentialForRealBackend(): Promise<void> {
   // Check if Custom Setting record already exists
   const existing = await querySalesforce(
-    `SELECT Id, Named_Credential_Name__c FROM Docgen_Settings__c LIMIT 1`
+    `SELECT Id, Named_Credential_Name__c, Test_Mode__c FROM Docgen_Settings__c LIMIT 1`
   );
 
   if (existing.length === 0) {
-    // Create new record with CI Named Credential
-    await createRecord('Docgen_Settings__c', { Named_Credential_Name__c: 'Docgen_Node_API_CI' });
-    console.log('✓ Created Docgen_Settings__c with Named Credential: Docgen_Node_API_CI');
-  } else {
-    // Update existing record (in case it has the wrong value)
-    await updateRecord('Docgen_Settings__c', existing[0].Id, {
-      Named_Credential_Name__c: 'Docgen_Node_API_CI'
+    // Create new record with CI Named Credential and test mode DISABLED
+    await createRecord('Docgen_Settings__c', {
+      Named_Credential_Name__c: 'Docgen_Node_API_CI',
+      Test_Mode__c: false
     });
-    console.log('✓ Updated Named Credential to: Docgen_Node_API_CI');
+    console.log('✓ Created Docgen_Settings__c with Named Credential: Docgen_Node_API_CI, Test Mode: false');
+  } else {
+    // Update existing record - set Named Credential and DISABLE test mode
+    await updateRecord('Docgen_Settings__c', existing[0].Id, {
+      Named_Credential_Name__c: 'Docgen_Node_API_CI',
+      Test_Mode__c: false
+    });
+    console.log('✓ Updated Docgen_Settings__c - Named Credential: Docgen_Node_API_CI, Test Mode: false');
   }
 
   // Enable Apex debug logging in CI for better diagnostics
