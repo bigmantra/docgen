@@ -190,6 +190,30 @@ export class SalesforceAuth {
   }
 
   /**
+   * Get the Salesforce instance URL
+   * Returns the instance URL from the cached token if available,
+   * otherwise returns the configured instance URL
+   */
+  getInstanceUrl(): string {
+    // If we have a cached token, use its instance URL (most current)
+    if (this.cachedToken?.instanceUrl) {
+      return this.cachedToken.instanceUrl;
+    }
+
+    // If using SFDX Auth URL, return the instance URL from it
+    if (this.parsedSfdxAuth?.instanceUrl) {
+      return `https://${this.parsedSfdxAuth.instanceUrl}`;
+    }
+
+    // Fallback to configured domain (for JWT Bearer Flow)
+    if (this.config.sfDomain) {
+      return `https://${this.config.sfDomain}`;
+    }
+
+    throw new Error('No Salesforce instance URL available');
+  }
+
+  /**
    * Fetch new access token from Salesforce
    *
    * Routes to appropriate authentication method:
