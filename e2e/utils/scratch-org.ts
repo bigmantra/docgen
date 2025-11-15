@@ -212,6 +212,68 @@ export async function createRecord(
 }
 
 /**
+ * Update a Salesforce record
+ */
+export async function updateRecord(
+  objectType: string,
+  recordId: string,
+  fields: Record<string, any>
+): Promise<void> {
+  try {
+    // Build field values string
+    const fieldValues = Object.entries(fields)
+      .map(([key, value]) => {
+        // Escape single quotes in string values
+        const escapedValue =
+          typeof value === 'string' ? value.replace(/'/g, "\\'") : value;
+        return `${key}='${escapedValue}'`;
+      })
+      .join(' ');
+
+    // In CI, use SF_USERNAME env var if available to explicitly target the org
+    const targetOrg = process.env.SF_USERNAME;
+    const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
+
+    // Log command for debugging in CI
+    const command = `sf data update record --sobject ${objectType} --record-id ${recordId} --values "${fieldValues}"${targetOrgFlag} --json`;
+    console.log('Executing:', command);
+
+    const { stdout, stderr } = await execAsync(command, {
+      env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' }
+    });
+
+    // Log stderr if present for debugging
+    if (stderr) {
+      console.error('SF CLI stderr (update):', stderr);
+    }
+
+    const cleanStdout = stdout.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
+    const result = JSON.parse(cleanStdout);
+
+    if (result.status !== 0) {
+      console.error('SF CLI error response:', JSON.stringify(result, null, 2));
+      throw new Error(`Record update failed: ${result.message}`);
+    }
+
+    console.log(`✓ Updated ${objectType} record: ${recordId}`);
+  } catch (error) {
+    if (error instanceof Error) {
+      const stdout = (error as any).stdout || '';
+      const stderr = (error as any).stderr || '';
+
+      console.error('Command failed with error:', error.message);
+      if (stdout) console.error('Stdout:', stdout);
+      if (stderr) console.error('Stderr:', stderr);
+
+      const stderrInfo = stderr ? `\nStderr: ${stderr}` : '';
+      const stdoutInfo = stdout ? `\nStdout: ${stdout}` : '';
+      throw new Error(`Failed to update record: ${error.message}${stdoutInfo}${stderrInfo}`);
+    }
+    throw error;
+  }
+}
+
+/**
  * Delete Salesforce records by IDs
  */
 export async function deleteRecords(

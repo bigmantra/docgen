@@ -25,12 +25,17 @@ export class DocgenTestPage {
   }
 
   /**
-   * Navigate to the Docgen Test Page with the specified Account recordId
+   * Navigate to the Docgen Test Page with the specified Account recordId and optional Template ID
    * @param accountId - The Account ID to pass as c__recordId parameter
+   * @param templateId - Optional Template ID to pass as c__templateId parameter
    */
-  async goto(accountId: string) {
+  async goto(accountId: string, templateId?: string) {
     const baseUrl = await this.getBaseUrl();
-    const url = `${baseUrl}/lightning/n/Docgen_Test_Page?c__recordId=${accountId}`;
+    let url = `${baseUrl}/lightning/n/Docgen_Test_Page?c__recordId=${accountId}`;
+
+    if (templateId) {
+      url += `&c__templateId=${templateId}`;
+    }
 
     // Use 'load' instead of 'networkidle' as Salesforce pages have continuous polling
     await this.page.goto(url, { waitUntil: 'load', timeout: 60000 });
@@ -38,8 +43,11 @@ export class DocgenTestPage {
     // Wait for the main docgen test page component
     await this.page.waitForSelector('c-docgen-test-page', { state: 'attached', timeout: 30000 });
 
-    // Wait for the docgen button component to be visible
-    await this.page.waitForSelector('c-docgen-button', { state: 'visible', timeout: 30000 });
+    // If templateId is provided, wait for button to be visible
+    // Otherwise, user needs to select template first
+    if (templateId) {
+      await this.page.waitForSelector('c-docgen-button', { state: 'visible', timeout: 30000 });
+    }
 
     // Wait a bit for the component to fully render
     await this.page.waitForTimeout(3000);

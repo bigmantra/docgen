@@ -16,6 +16,21 @@ public with sharing class DocgenController {
     }
 
     /**
+     * Get Named Credential name from Custom Settings
+     * Allows configuring different Named Credentials for different environments
+     * (e.g., 'Docgen_Node_API_CI' for CI tests, 'Docgen_Node_API' for production)
+     * Defaults to 'Docgen_Node_API' if not configured
+     */
+    @TestVisible
+    private static String getNamedCredentialName() {
+        Docgen_Settings__c settings = Docgen_Settings__c.getInstance();
+        if (settings != null && String.isNotBlank(settings.Named_Credential_Name__c)) {
+            return settings.Named_Credential_Name__c;
+        }
+        return 'Docgen_Node_API'; // Default to production Named Credential
+    }
+
+    /**
      * Generate a document interactively
      *
      * @param templateId ID of the Docgen_Template__c record
@@ -225,7 +240,7 @@ public with sharing class DocgenController {
 
         // Production mode: make actual HTTP callout
         HttpRequest req = new HttpRequest();
-        req.setEndpoint('callout:Docgen_Node_API/generate');
+        req.setEndpoint('callout:' + getNamedCredentialName() + '/generate');
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
         req.setHeader('Accept', 'application/json');

@@ -45,6 +45,7 @@ const COLUMNS = [
 
 export default class DocgenTestPage extends NavigationMixin(LightningElement) {
     @track recordId;
+    @track templateId;
     @track generatedDocuments;
     columns = COLUMNS;
     pageRef;
@@ -54,11 +55,17 @@ export default class DocgenTestPage extends NavigationMixin(LightningElement) {
     getPageReference(pageRef) {
         this.pageRef = pageRef;
         if (pageRef && pageRef.state) {
-            // Read c__recordId from URL parameters
+            // Read c__recordId and c__templateId from URL parameters
             const recordIdParam = pageRef.state.c__recordId;
+            const templateIdParam = pageRef.state.c__templateId;
+
             if (recordIdParam && recordIdParam !== this.recordId) {
                 this.recordId = recordIdParam;
                 this.loadGeneratedDocuments();
+            }
+
+            if (templateIdParam && templateIdParam !== this.templateId) {
+                this.templateId = templateIdParam;
             }
         }
     }
@@ -69,25 +76,38 @@ export default class DocgenTestPage extends NavigationMixin(LightningElement) {
 
         if (this.recordId) {
             // Update URL to include the selected account ID
-            this.updateUrlWithRecordId(this.recordId);
+            this.updateUrlParams();
             this.loadGeneratedDocuments();
         } else {
             // Clear the recordId from URL
-            this.updateUrlWithRecordId(null);
+            this.updateUrlParams();
             this.generatedDocuments = null;
         }
     }
 
-    // Update the URL with the recordId parameter
-    updateUrlWithRecordId(recordId) {
+    // Handle template selection from lookup
+    handleTemplateSelection(event) {
+        this.templateId = event.detail.recordId;
+        // Update URL to persist template selection
+        this.updateUrlParams();
+    }
+
+    // Update the URL with recordId and templateId parameters
+    updateUrlParams() {
         const newState = {
             ...this.pageRef.state
         };
 
-        if (recordId) {
-            newState.c__recordId = recordId;
+        if (this.recordId) {
+            newState.c__recordId = this.recordId;
         } else {
             delete newState.c__recordId;
+        }
+
+        if (this.templateId) {
+            newState.c__templateId = this.templateId;
+        } else {
+            delete newState.c__templateId;
         }
 
         this[NavigationMixin.Navigate]({

@@ -1,7 +1,10 @@
 import { test as base, Page } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   getScratchOrgInfo,
   createRecord,
+  updateRecord,
   deleteRecords,
   querySalesforce,
   ScratchOrgInfo,
@@ -11,6 +14,7 @@ export interface TestData {
   accountId: string;
   templateId: string;
   generatedDocIds: string[];
+  contentVersionId?: string; // Track uploaded template for cleanup
 }
 
 export interface SalesforceFixture {
@@ -42,8 +46,15 @@ export const test = base.extend<{ salesforce: SalesforceFixture }>({
     // Create test data
     const testData = await createTestData(orgInfo);
 
-    // Enable test mode in DocgenController (bypass HTTP callouts)
-    await enableTestMode();
+    // Configure environment mode
+    if (process.env.TEST_MODE_DISABLED !== 'true') {
+      // Enable test mode in DocgenController (bypass HTTP callouts)
+      await enableTestMode();
+    } else {
+      // Configure Named Credential for real backend tests
+      console.log('⚠️  Test mode DISABLED - tests will make real HTTP callouts to backend');
+      await configureNamedCredentialForRealBackend();
+    }
 
     // Provide fixture to test
     await use({
@@ -58,13 +69,34 @@ export const test = base.extend<{ salesforce: SalesforceFixture }>({
     );
     const generatedDocIds = generatedDocs.map((doc) => doc.Id);
     if (generatedDocIds.length > 0) {
+      console.log(`Cleaning up ${generatedDocIds.length} Generated_Document__c record(s)...`);
       await deleteRecords('Generated_Document__c', generatedDocIds);
     }
 
-    // Cleanup: Delete test Account (cascade deletes related records)
-    await deleteRecords('Account', [testData.accountId]);
+    // Cleanup: Delete uploaded ContentVersion (if using real backend)
+    if (testData.contentVersionId && process.env.TEST_MODE_DISABLED === 'true') {
+      try {
+        console.log(`Cleaning up ContentVersion: ${testData.contentVersionId}...`);
+        await deleteRecords('ContentVersion', [testData.contentVersionId]);
+        console.log('✓ ContentVersion deleted');
 
-    // Note: We don't delete the E2E_Test_Template since it's shared across tests
+        // Also delete the template record created for this test
+        console.log(`Cleaning up Template: ${testData.templateId}...`);
+        await deleteRecords('Docgen_Template__c', [testData.templateId]);
+        console.log('✓ Template deleted');
+      } catch (error) {
+        console.warn('⚠️  Failed to delete ContentVersion or Template:', error);
+        // Non-fatal - ContentVersions auto-delete after 30 days in scratch orgs
+      }
+    }
+
+    // Cleanup: Delete test Account (cascade deletes related records)
+    console.log(`Cleaning up Account: ${testData.accountId}...`);
+    await deleteRecords('Account', [testData.accountId]);
+    console.log('✓ Account deleted');
+
+    // Note: In test mode, we don't delete the shared E2E_Test_Template
+    // In real backend mode, each test has its own template which we delete above
   },
 });
 
@@ -137,6 +169,34 @@ async function enableTestMode(): Promise<void> {
   }
 
   console.log('✓ Test mode enabled in DocgenController');
+
+  // Enable Apex debug logging in CI for better diagnostics
+  if (process.env.CI) {
+    await enableApexDebugLogging();
+  }
+}
+
+/**
+ * Configure Named Credential for real backend tests via Custom Settings
+ * Sets Named_Credential_Name__c to 'Docgen_Node_API_CI' for CI/test environments
+ */
+async function configureNamedCredentialForRealBackend(): Promise<void> {
+  // Check if Custom Setting record already exists
+  const existing = await querySalesforce(
+    `SELECT Id, Named_Credential_Name__c FROM Docgen_Settings__c LIMIT 1`
+  );
+
+  if (existing.length === 0) {
+    // Create new record with CI Named Credential
+    await createRecord('Docgen_Settings__c', { Named_Credential_Name__c: 'Docgen_Node_API_CI' });
+    console.log('✓ Created Docgen_Settings__c with Named Credential: Docgen_Node_API_CI');
+  } else {
+    // Update existing record (in case it has the wrong value)
+    await updateRecord('Docgen_Settings__c', existing[0].Id, {
+      Named_Credential_Name__c: 'Docgen_Node_API_CI'
+    });
+    console.log('✓ Updated Named Credential to: Docgen_Node_API_CI');
+  }
 
   // Enable Apex debug logging in CI for better diagnostics
   if (process.env.CI) {
@@ -313,31 +373,96 @@ async function createTestData(orgInfo: ScratchOrgInfo): Promise<TestData> {
   });
   console.log(`✓ Created Account with ID: ${accountId}`);
 
-  // Check if our standard test template exists, create if not
-  const existingTemplates = await querySalesforce(
-    `SELECT Id, Name FROM Docgen_Template__c WHERE Name = 'E2E_Test_Template' LIMIT 1`
-  );
-
   let templateId: string;
-  let templateName: string;
+  let contentVersionId: string | undefined;
 
-  if (existingTemplates.length > 0) {
-    // Use existing template
-    templateId = existingTemplates[0].Id;
-    templateName = existingTemplates[0].Name;
-    console.log(`Using existing test template: ${templateName} (${templateId})`);
-  } else {
-    // Create template with consistent name for all tests
-    // For UI-only tests, we mock the backend response, so template content doesn't matter
-    templateName = 'E2E_Test_Template';
+  // Check if we should use real backend (upload real template)
+  const useRealBackend = process.env.TEST_MODE_DISABLED === 'true';
+
+  if (useRealBackend) {
+    console.log('📄 Uploading real template for backend testing...');
+
+    // Read test-template.docx file
+    const templatePath = path.join(__dirname, 'test-template.docx');
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template file not found: ${templatePath}`);
+    }
+
+    const templateBuffer = fs.readFileSync(templatePath);
+    const templateBase64 = templateBuffer.toString('base64');
+    console.log(`  Template file size: ${templateBuffer.length} bytes`);
+
+    // Upload to ContentVersion
+    // Use unique title to avoid collisions, but template Name will be static
+    contentVersionId = await createRecord('ContentVersion', {
+      Title: `E2E_Test_Template_${uniqueId}`, // Unique title for ContentVersion
+      PathOnClient: 'test-template.docx',
+      VersionData: templateBase64,
+      FirstPublishLocationId: accountId,
+    });
+    console.log(`✓ Uploaded ContentVersion: ${contentVersionId}`);
+
+    // Wait for ContentDocument creation (Salesforce async process)
+    console.log('  Waiting for ContentDocument creation...');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    // Retry logic for ContentVersion query
+    let cvResult = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        cvResult = await querySalesforce(
+          `SELECT Id, ContentDocumentId FROM ContentVersion WHERE Id = '${contentVersionId}'`
+        );
+        if (cvResult.length > 0 && cvResult[0].ContentDocumentId) {
+          console.log(`✓ ContentDocument created: ${cvResult[0].ContentDocumentId}`);
+          break;
+        }
+      } catch (error) {
+        console.log(`  Attempt ${attempt}/3 failed, retrying...`);
+      }
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+
+    if (!cvResult || cvResult.length === 0) {
+      throw new Error('Failed to retrieve ContentVersion after upload');
+    }
+
+    // Create Docgen_Template__c with real ContentVersionId
+    // Use unique name to avoid conflicts between parallel tests
+    // Template ID is passed to the test page via URL parameter
+    const templateName = `E2E_Test_Template_${uniqueId}`;
     console.log(`Creating test Template: ${templateName}`);
     templateId = await createRecord('Docgen_Template__c', {
       Name: templateName,
       DataSource__c: 'SOQL',
-      TemplateContentVersionId__c: '068000000000000AAA', // Mock ContentVersion ID
-      SOQL__c: 'SELECT Id, Name FROM Account WHERE Id = :recordId', // Minimal SOQL for test mode
+      TemplateContentVersionId__c: contentVersionId,
+      SOQL__c: `SELECT Id, Name, BillingCity FROM Account WHERE Id = :recordId`,
+      StoreMergedDocx__c: false,
+      ReturnDocxToBrowser__c: false,
     });
     console.log(`✓ Created Template with ID: ${templateId}`);
+  } else {
+    // Test mode: Use mock template (shared across tests)
+    console.log('🧪 Using mock template for test mode...');
+
+    const existingTemplates = await querySalesforce(
+      `SELECT Id, Name FROM Docgen_Template__c WHERE Name = 'E2E_Test_Template' LIMIT 1`
+    );
+
+    if (existingTemplates.length > 0) {
+      templateId = existingTemplates[0].Id;
+      console.log(`Using existing test template: ${existingTemplates[0].Name} (${templateId})`);
+    } else {
+      templateId = await createRecord('Docgen_Template__c', {
+        Name: 'E2E_Test_Template',
+        DataSource__c: 'SOQL',
+        TemplateContentVersionId__c: '068000000000000AAA', // Mock ContentVersion ID
+        SOQL__c: 'SELECT Id, Name FROM Account WHERE Id = :recordId',
+      });
+      console.log(`✓ Created mock Template with ID: ${templateId}`);
+    }
   }
 
   // In CI, log the record URLs for manual inspection
@@ -345,6 +470,9 @@ async function createTestData(orgInfo: ScratchOrgInfo): Promise<TestData> {
     console.log(`\nDirect URLs to test records:`);
     console.log(`  Account: ${orgInfo.instanceUrl}/lightning/r/Account/${accountId}/view`);
     console.log(`  Template: ${orgInfo.instanceUrl}/lightning/r/Docgen_Template__c/${templateId}/view`);
+    if (contentVersionId) {
+      console.log(`  ContentVersion: ${orgInfo.instanceUrl}/lightning/r/ContentVersion/${contentVersionId}/view`);
+    }
     console.log('');
   }
 
@@ -352,5 +480,6 @@ async function createTestData(orgInfo: ScratchOrgInfo): Promise<TestData> {
     accountId,
     templateId,
     generatedDocIds: [],
+    contentVersionId,
   };
 }

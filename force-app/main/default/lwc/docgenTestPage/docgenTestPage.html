@@ -45,13 +45,32 @@
             <div class="slds-m-around_medium">
                 <lightning-card title="Document Generation" icon-name="action:new_note">
                     <div class="slds-p-around_medium">
-                        <c-docgen-button
-                            record-id={recordId}
-                            template-name="E2E_Test_Template"
-                            output-format="PDF"
-                            button-label="Generate Test Document"
-                            success-message="Test document generated successfully!">
-                        </c-docgen-button>
+                        <!-- Template Selection -->
+                        <div class="slds-m-bottom_medium">
+                            <lightning-record-picker
+                                label="Template"
+                                placeholder="Search Templates..."
+                                object-api-name="Docgen_Template__c"
+                                value={templateId}
+                                onchange={handleTemplateSelection}>
+                            </lightning-record-picker>
+                        </div>
+
+                        <!-- Generate Button (enabled when template is selected) -->
+                        <template if:true={templateId}>
+                            <c-docgen-button
+                                record-id={recordId}
+                                template-id={templateId}
+                                output-format="PDF"
+                                button-label="Generate Test Document"
+                                success-message="Test document generated successfully!">
+                            </c-docgen-button>
+                        </template>
+                        <template if:false={templateId}>
+                            <div class="slds-text-color_weak slds-text-align_center">
+                                Please select a template to generate a document.
+                            </div>
+                        </template>
                     </div>
                 </lightning-card>
             </div>
