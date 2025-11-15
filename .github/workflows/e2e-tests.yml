@@ -67,24 +67,7 @@ jobs:
       - name: Deploy Salesforce metadata
         run: |
           sf project deploy start --source-dir force-app --wait 10
-
-      - name: Configure Named Credential with CI backend URL
-        run: |
-          BACKEND_URL="${{ needs.deploy-ci-backend.outputs.backend_url }}"
-          echo "Configuring Named Credential with backend URL: $BACKEND_URL"
-
-          # Get API version
-          API_VERSION=$(sf org display --json | jq -r '.result.apiVersion // "60.0"')
-          echo "Using API version: v${API_VERSION}"
-
-          # Update Named Credential URL via Connect REST API
-          sf data update record \
-            --sobject NamedCredential \
-            --where "DeveloperName='Docgen_Node_API_CI'" \
-            --values "Endpoint='${BACKEND_URL}'" \
-            --json
-
-          echo "✅ Named Credential configured with CI backend URL"
+          echo "✅ Metadata deployed (includes Named Credential with CI backend URL)"
 
       - name: Configure External Credential with AAD secrets
         id: apex-config
