@@ -102,6 +102,45 @@ jobs:
         run: |
           sf org assign permset --name Docgen_User
 
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set Azure Subscription
+        run: az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure CI backend with scratch org credentials
+        run: |
+          echo "Configuring CI backend to authenticate with scratch org..."
+
+          # Get SFDX Auth URL from scratch org
+          SFDX_AUTH_URL=$(sf org display --verbose --json | jq -r '.result.sfdxAuthUrl')
+
+          if [ -z "$SFDX_AUTH_URL" ] || [ "$SFDX_AUTH_URL" = "null" ]; then
+            echo "❌ Failed to extract SFDX Auth URL from org"
+            exit 1
+          fi
+
+          echo "✅ Extracted SFDX Auth URL from scratch org"
+
+          # Update Key Vault secret
+          az keyvault secret set \
+            --vault-name docgen-ci-kv \
+            --name SFDX-AUTH-URL \
+            --value "$SFDX_AUTH_URL" \
+            --output none
+
+          echo "✅ Updated Key Vault with scratch org credentials"
+
+          # Restart Container App to pick up new secret
+          az containerapp update \
+            --name docgen-ci \
+            --resource-group docgen-ci-rg \
+            --output none
+
+          echo "✅ Container App restart initiated"
+
       - name: Get org credentials
         id: org-info
         run: |
