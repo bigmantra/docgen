@@ -4,7 +4,34 @@
  */
 import { test, expect } from '../fixtures/salesforce.fixture';
 import { DocgenTestPage } from '../pages/DocgenTestPage';
-import { createRecord, querySalesforce, waitForSalesforceRecord } from '../utils/scratch-org';
+import { createRecord, querySalesforce, waitForSalesforceRecord, deleteRecords } from '../utils/scratch-org';
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * Upload a template file and return its ContentVersionId
+ */
+async function uploadTemplate(templateFileName: string, recordId: string): Promise<string> {
+    const templatePath = path.join(__dirname, '../fixtures', templateFileName);
+    if (!fs.existsSync(templatePath)) {
+        throw new Error(`Template file not found: ${templatePath}`);
+    }
+
+    const templateBuffer = fs.readFileSync(templatePath);
+    const templateBase64 = templateBuffer.toString('base64');
+
+    const contentVersionId = await createRecord('ContentVersion', {
+        Title: `E2E_${templateFileName}`,
+        PathOnClient: templateFileName,
+        VersionData: templateBase64,
+        FirstPublishLocationId: recordId,
+    });
+
+    // Wait for ContentDocument creation
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    return contentVersionId;
+}
 
 test.describe('Multi-Object Document Generation', () => {
 
@@ -22,13 +49,17 @@ test.describe('Multi-Object Document Generation', () => {
         const contactId = await createRecord('Contact', contactData);
         console.log(`✓ Created Contact: ${contactId}`);
 
+        // And: Upload Contact-specific template
+        const contentVersionId = await uploadTemplate('test-template-contact.docx', contactId);
+        console.log(`✓ Uploaded Contact template: ${contentVersionId}`);
+
         // And: Template configured for Contact
         const templateData = {
             Name: 'Contact E2E Template',
             PrimaryParent__c: 'Contact',
             DataSource__c: 'SOQL',
             SOQL__c: 'SELECT Id, FirstName, LastName, Email FROM Contact WHERE Id = :recordId',
-            TemplateContentVersionId__c: salesforce.testData.contentVersionId,
+            TemplateContentVersionId__c: contentVersionId,
             StoreMergedDocx__c: false,
             ReturnDocxToBrowser__c: true
         };
@@ -38,7 +69,7 @@ test.describe('Multi-Object Document Generation', () => {
         // When: Navigate to Contact record page
         const testPage = new DocgenTestPage(salesforce.authenticatedPage);
         await testPage.goto(contactId, templateId);
-        await testPage.waitForAccountDetailsLoaded();
+        await testPage.waitForRecordDetailsLoaded();
         console.log('✓ Contact record page loaded');
 
         // Click generate button
@@ -83,6 +114,12 @@ test.describe('Multi-Object Document Generation', () => {
         console.log(`✓ ContentDocumentLink created for Contact (${links.length} link(s))`);
 
         console.log('✅ PDF generated successfully for Contact\n');
+
+        // Cleanup
+        await deleteRecords('Generated_Document__c', [docs[0].Id]);
+        await deleteRecords('Docgen_Template__c', [templateId]);
+        await deleteRecords('ContentVersion', [contentVersionId]);
+        await deleteRecords('Contact', [contactId]);
     });
 
     test('generates PDF for Lead successfully', async ({ salesforce }) => {
@@ -101,13 +138,17 @@ test.describe('Multi-Object Document Generation', () => {
         const leadId = await createRecord('Lead', leadData);
         console.log(`✓ Created Lead: ${leadId}`);
 
+        // And: Upload Lead-specific template
+        const contentVersionId = await uploadTemplate('test-template-lead.docx', leadId);
+        console.log(`✓ Uploaded Lead template: ${contentVersionId}`);
+
         // And: Template configured for Lead
         const templateData = {
             Name: 'Lead E2E Template',
             PrimaryParent__c: 'Lead',
             DataSource__c: 'SOQL',
             SOQL__c: 'SELECT Id, FirstName, LastName, Company, Email, Status FROM Lead WHERE Id = :recordId',
-            TemplateContentVersionId__c: salesforce.testData.contentVersionId,
+            TemplateContentVersionId__c: contentVersionId,
             StoreMergedDocx__c: false,
             ReturnDocxToBrowser__c: true
         };
@@ -117,7 +158,7 @@ test.describe('Multi-Object Document Generation', () => {
         // When: Navigate to Lead record page
         const testPage = new DocgenTestPage(salesforce.authenticatedPage);
         await testPage.goto(leadId, templateId);
-        await testPage.waitForAccountDetailsLoaded();
+        await testPage.waitForRecordDetailsLoaded();
         console.log('✓ Lead record page loaded');
 
         // Click generate button
@@ -162,6 +203,12 @@ test.describe('Multi-Object Document Generation', () => {
         console.log(`✓ ContentDocumentLink created for Lead (${links.length} link(s))`);
 
         console.log('✅ PDF generated successfully for Lead\n');
+
+        // Cleanup
+        await deleteRecords('Generated_Document__c', [docs[0].Id]);
+        await deleteRecords('Docgen_Template__c', [templateId]);
+        await deleteRecords('ContentVersion', [contentVersionId]);
+        await deleteRecords('Lead', [leadId]);
     });
 
     test('generates PDF for Opportunity successfully', async ({ salesforce }) => {
@@ -187,13 +234,17 @@ test.describe('Multi-Object Document Generation', () => {
         const oppId = await createRecord('Opportunity', oppData);
         console.log(`✓ Created Opportunity: ${oppId}`);
 
+        // And: Upload Opportunity-specific template
+        const contentVersionId = await uploadTemplate('test-template-opportunity.docx', oppId);
+        console.log(`✓ Uploaded Opportunity template: ${contentVersionId}`);
+
         // And: Template configured for Opportunity
         const templateData = {
             Name: 'Opportunity E2E Template',
             PrimaryParent__c: 'Opportunity',
             DataSource__c: 'SOQL',
             SOQL__c: 'SELECT Id, Name, StageName, CloseDate, Amount, AccountId, Account.Name FROM Opportunity WHERE Id = :recordId',
-            TemplateContentVersionId__c: salesforce.testData.contentVersionId,
+            TemplateContentVersionId__c: contentVersionId,
             StoreMergedDocx__c: false,
             ReturnDocxToBrowser__c: true
         };
@@ -203,7 +254,7 @@ test.describe('Multi-Object Document Generation', () => {
         // When: Navigate to Opportunity record page
         const testPage = new DocgenTestPage(salesforce.authenticatedPage);
         await testPage.goto(oppId, templateId);
-        await testPage.waitForAccountDetailsLoaded();
+        await testPage.waitForRecordDetailsLoaded();
         console.log('✓ Opportunity record page loaded');
 
         // Click generate button
@@ -259,6 +310,13 @@ test.describe('Multi-Object Document Generation', () => {
         console.log(`✓ ContentDocumentLink created for Account (${accLinks.length} link(s))`);
 
         console.log('✅ PDF generated successfully for Opportunity with Account relationship\n');
+
+        // Cleanup
+        await deleteRecords('Generated_Document__c', [docs[0].Id]);
+        await deleteRecords('Docgen_Template__c', [templateId]);
+        await deleteRecords('ContentVersion', [contentVersionId]);
+        await deleteRecords('Opportunity', [oppId]);
+        await deleteRecords('Account', [accountId]);
     });
 
     test('verifies dynamic lookup fields are correctly set for all object types', async ({ salesforce }) => {

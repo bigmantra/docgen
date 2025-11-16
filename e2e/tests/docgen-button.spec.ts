@@ -20,7 +20,7 @@ test.describe('docgenButton Component Tests', () => {
 
     console.log('\nNavigating to Docgen test page...');
     await testPage.goto(salesforce.testData.accountId, salesforce.testData.templateId);
-    await testPage.waitForAccountDetailsLoaded();
+    await testPage.waitForRecordDetailsLoaded();
     console.log('✓ Docgen test page loaded');
 
     // Verify button is visible
@@ -123,7 +123,7 @@ test.describe('docgenButton Component Tests', () => {
     const button = new DocgenButtonComponent(salesforce.authenticatedPage);
 
     await testPage.goto(salesforce.testData.accountId, salesforce.testData.templateId);
-    await testPage.waitForAccountDetailsLoaded();
+    await testPage.waitForRecordDetailsLoaded();
 
     // First click
     console.log('First click...');

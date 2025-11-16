@@ -80,13 +80,20 @@ export default class DocgenTestPage extends NavigationMixin(LightningElement) {
     getPageReference(pageRef) {
         this.pageRef = pageRef;
         if (pageRef && pageRef.state) {
-            // Read c__recordId and c__templateId from URL parameters
+            // Read c__recordId, c__templateId, and c__objectType from URL parameters
             const recordIdParam = pageRef.state.c__recordId;
             const templateIdParam = pageRef.state.c__templateId;
+            const objectTypeParam = pageRef.state.c__objectType;
+
+            // Restore object type from URL if present
+            if (objectTypeParam && objectTypeParam !== this.selectedObjectApiName) {
+                this.selectedObjectApiName = objectTypeParam;
+                this.updateSelectedObjectConfig();
+            }
 
             if (recordIdParam && recordIdParam !== this.recordId) {
                 this.recordId = recordIdParam;
-                // Detect object type from the recordId
+                // Detect object type from the recordId (will override URL param if present)
                 this.detectObjectTypeFromRecordId(recordIdParam);
             }
 
@@ -191,7 +198,7 @@ export default class DocgenTestPage extends NavigationMixin(LightningElement) {
         this.updateUrlParams();
     }
 
-    // Update the URL with recordId and templateId parameters
+    // Update the URL with recordId, templateId, and objectType parameters
     updateUrlParams() {
         if (!this.pageRef) {
             return;
@@ -211,6 +218,12 @@ export default class DocgenTestPage extends NavigationMixin(LightningElement) {
             newState.c__templateId = this.templateId;
         } else {
             delete newState.c__templateId;
+        }
+
+        if (this.selectedObjectApiName) {
+            newState.c__objectType = this.selectedObjectApiName;
+        } else {
+            delete newState.c__objectType;
         }
 
         this[NavigationMixin.Navigate]({
