@@ -62,6 +62,11 @@ describe('Key Vault Secrets Loader', () => {
           properties: {},
         } as any)
         .mockResolvedValueOnce({
+          value: undefined,
+          name: 'SFDX-AUTH-URL',
+          properties: {},
+        } as any)
+        .mockResolvedValueOnce({
           value: 'InstrumentationKey=test-key',
           name: 'AZURE-MONITOR-CONNECTION-STRING',
           properties: {},
@@ -77,11 +82,12 @@ describe('Key Vault Secrets Loader', () => {
         azureMonitorConnectionString: 'InstrumentationKey=test-key',
       });
 
-      expect(mockSecretClient.getSecret).toHaveBeenCalledTimes(5);
+      expect(mockSecretClient.getSecret).toHaveBeenCalledTimes(6);
       expect(mockSecretClient.getSecret).toHaveBeenCalledWith('SF-PRIVATE-KEY');
       expect(mockSecretClient.getSecret).toHaveBeenCalledWith('SF-CLIENT-ID');
       expect(mockSecretClient.getSecret).toHaveBeenCalledWith('SF-USERNAME');
       expect(mockSecretClient.getSecret).toHaveBeenCalledWith('SF-DOMAIN');
+      expect(mockSecretClient.getSecret).toHaveBeenCalledWith('SFDX-AUTH-URL');
       expect(mockSecretClient.getSecret).toHaveBeenCalledWith('AZURE-MONITOR-CONNECTION-STRING');
     });
 
@@ -106,6 +112,11 @@ describe('Key Vault Secrets Loader', () => {
         .mockResolvedValueOnce({
           value: undefined,
           name: 'SF-DOMAIN',
+          properties: {},
+        } as any)
+        .mockResolvedValueOnce({
+          value: undefined,
+          name: 'SFDX-AUTH-URL',
           properties: {},
         } as any)
         .mockResolvedValueOnce({
@@ -169,6 +180,11 @@ describe('Key Vault Secrets Loader', () => {
         .mockResolvedValueOnce({
           value: 'test.salesforce.com',
           name: 'SF-DOMAIN',
+          properties: {},
+        } as any)
+        .mockResolvedValueOnce({
+          value: undefined,
+          name: 'SFDX-AUTH-URL',
           properties: {},
         } as any)
         .mockResolvedValueOnce({

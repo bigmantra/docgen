@@ -265,7 +265,7 @@ export class PollerService {
       if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
 
       const now = new Date().toISOString();
       const batchSize = getConfig().poller.batchSize;
@@ -301,7 +301,7 @@ export class PollerService {
       if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
 
       const lockUntil = new Date(Date.now() + getConfig().poller.lockTtlMs).toISOString();
 
@@ -338,7 +338,7 @@ export class PollerService {
       if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
       const templateService = new TemplateService(sfApi);
 
       // Fetch template
@@ -482,7 +482,7 @@ export class PollerService {
       if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
 
       await updateGeneratedDocument(
         documentId,
@@ -518,7 +518,7 @@ export class PollerService {
       if (!sfAuth || !getConfig().sfDomain) {
         throw new Error('Salesforce authentication not configured');
       }
-      const sfApi = new SalesforceApi(sfAuth, `https://${getConfig().sfDomain}`);
+      const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
 
       // Check if we should retry
       if (retryable && newAttempts <= getConfig().poller.maxAttempts) {

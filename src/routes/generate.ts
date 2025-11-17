@@ -74,21 +74,9 @@ const docgenRequestSchema = {
     },
     parents: {
       type: 'object',
-      properties: {
-        AccountId: {
-          type: ['string', 'null'],
-          description: 'Salesforce Account ID (18 chars)',
-        },
-        OpportunityId: {
-          type: ['string', 'null'],
-          description: 'Salesforce Opportunity ID (18 chars)',
-        },
-        CaseId: {
-          type: ['string', 'null'],
-          description: 'Salesforce Case ID (18 chars)',
-        },
-      },
-      additionalProperties: false,
+      description:
+        'Parent record IDs for file linking. Keys: "{ObjectType}Id" (e.g., ContactId, LeadId). Values: Salesforce ID (15/18 chars) or null.',
+      additionalProperties: true,
     },
     requestHash: {
       type: 'string',
@@ -145,7 +133,7 @@ async function generateHandler(
     if (!sfAuth) {
       throw new Error('Salesforce authentication not configured');
     }
-    const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+    const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
     const templateService = new TemplateService(sfApi);
 
     // Step 1: Fetch template from Salesforce (with caching)
@@ -321,7 +309,7 @@ async function generateHandler(
         if (!sfAuth) {
           throw new Error('Salesforce authentication not configured');
         }
-        const sfApi = new SalesforceApi(sfAuth, `https://${config.sfDomain}`);
+        const sfApi = new SalesforceApi(sfAuth, sfAuth.getInstanceUrl());
 
         await sfApi.patch(
           `/services/data/v59.0/sobjects/Generated_Document__c/${request.body.generatedDocumentId}`,

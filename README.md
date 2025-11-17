@@ -113,13 +113,78 @@ sf apex run test --test-level RunLocalTests --result-format human
 - `scripts/delete-scratch-org.sh [alias]` - Delete scratch org
 
 **Salesforce Components**:
+- **Custom App**: `Docgen` - Lightning app with custom tabs for templates, generated documents, and test page
+  - `Docgen Templates` tab - List view for Docgen_Template__c
+  - `Generated Documents` tab - List view for Generated_Document__c
+  - `Docgen Test Page` tab - App page for e2e testing (test metadata only)
 - `Docgen_Template__c` - Template configuration object (7 fields)
 - `Generated_Document__c` - Document generation tracking object (15 fields)
 - `DocgenDataProvider` - Interface for pluggable data collection strategies
 - `StandardSOQLProvider` - Default SOQL provider with locale-aware formatting
 - `DocgenEnvelopeService` - JSON envelope builder with SHA-256 RequestHash
 - `DocgenController` - Interactive document generation controller (calls Node API via Named Credential)
-- Apex test classes: 6 test classes with 44 test methods (all passing)
+- `docgenButton` - LWC component for interactive PDF/DOCX generation (deployable to Record/App/Home pages)
+- `docgenTestPage` - LWC wrapper component for e2e testing on App pages (reads recordId from URL parameters)
+- Apex test classes: 7 test classes with 50 test methods (all passing)
+
+### Object Configuration
+
+The system uses **Custom Metadata Types** to control which Salesforce objects can generate documents. This enables admins to add support for new objects (Contact, Lead, custom objects) without code deployments.
+
+**Configuration Object:** `Supported_Object__mdt`
+
+**Fields:**
+- `Object_API_Name__c` *(Text, Required)* - API name of the supported object (e.g., "Account", "Contact", "Custom__c")
+- `Lookup_Field_API_Name__c` *(Text, Required)* - Lookup field on `Generated_Document__c` that references this object (e.g., "Account__c", "Contact__c")
+- `Is_Active__c` *(Checkbox, Default: true)* - Enable/disable object without deleting configuration
+- `Display_Order__c` *(Number)* - Sort order for UI picklists (optional)
+- `Description__c` *(Text Area)* - Admin notes about this object configuration
+
+**Pre-configured Objects:**
+
+| Object | Lookup Field | Display Order | Status |
+|--------|--------------|---------------|--------|
+| Account | Account__c | 10 | Active |
+| Opportunity | Opportunity__c | 20 | Active |
+| Case | Case__c | 30 | Active |
+| Contact | Contact__c | 40 | Active |
+| Lead | Lead__c | 50 | Active |
+
+**How to Add Support for a New Object** (e.g., Contact):
+
+1. **Create lookup field** on `Generated_Document__c`:
+   ```bash
+   # Via Salesforce CLI or Setup UI
+   # Field: Contact__c → Lookup(Contact)
+   # Delete Constraint: Set Null
+   # Required: false
+   ```
+
+2. **Add Custom Metadata record** in Setup:
+   - Go to **Setup → Custom Metadata Types → Supported Object → Manage Records**
+   - Click **New**
+   - Set `Object_API_Name__c` = "Contact"
+   - Set `Lookup_Field_API_Name__c` = "Contact__c"
+   - Set `Is_Active__c` = true
+   - Set `Display_Order__c` = 40 (or any order)
+   - Save
+
+3. **Grant field permissions**:
+   - Add `Contact__c` field to `Docgen_User` permission set
+   - Grant Read and Edit access
+
+4. **Test** by generating a document from a Contact record
+
+**Documentation:**
+- **[Admin Guide](docs/ADMIN_GUIDE.md)** - Step-by-step guide for Salesforce Admins to add new objects
+- **[Migration Guide](docs/MIGRATION_GUIDE.md)** - Upgrade guide for existing installations (fully backward compatible)
+- **[Admin Runbook](docs/ADMIN_RUNBOOK.md)** - Operational procedures and troubleshooting
+- **[Implementation Playbook](docs/OBJECT_CONFIGURABILITY_PLAYBOOK.md)** - Detailed technical design and implementation steps
+
+**Sample Files:**
+- `samples/contact.json` - Sample request payload for Contact object
+- `samples/lead.json` - Sample request payload for Lead object
+- `samples/templates/README.md` - Template examples (Contact, Lead, Asset) with SOQL queries
 
 ### Named Credential Setup
 
@@ -1006,7 +1071,17 @@ npm run test:coverage
 
 # Or manually
 sf apex run test --test-level RunLocalTests --code-coverage --result-format human
+
+# Run specific test classes
+sf apex run test --class-names DocgenMultiObjectIntegrationTest --code-coverage --result-format human
 ```
+
+**Test Coverage**:
+- **112 Apex tests** with **86% code coverage** (exceeds 75% requirement)
+- **Multi-object support**: Account, Opportunity, Case, Contact, Lead
+- **Test Data Factory**: `DocgenTestDataFactory.cls` provides reusable scenario builders
+- **Bulk testing**: Validates 200+ record operations
+- **Integration tests**: `DocgenMultiObjectIntegrationTest.cls` tests end-to-end flows across all supported objects
 
 ### LWC Tests
 
@@ -1023,14 +1098,22 @@ npm run test:lwc:coverage
 
 ### E2E Tests (Playwright)
 
-End-to-end tests verify the `docgenButton` LWC component in a real Salesforce environment (UI-only, no backend required).
+End-to-end tests verify the complete document generation flow with a real backend and Salesforce scratch org. Tests interact with the LWC component, trigger backend processing, and validate file uploads.
 
+#### Running E2E Tests Locally
+
+**Prerequisites**:
+- Azure CLI authenticated (`az login`)
+- Salesforce CLI authenticated to Dev Hub
+- Scratch org created and set as default
+
+**Quick Start**:
 ```bash
 # Step 1: Create scratch org and deploy metadata
 npm run e2e:setup
 
-# Step 2: Run Playwright E2E tests
-npm run test:e2e
+# Step 2: Configure CI backend + run tests (recommended)
+npm run test:e2e:local
 
 # Step 3: View test results
 npm run test:e2e:report
@@ -1039,21 +1122,48 @@ npm run test:e2e:report
 npm run e2e:teardown
 ```
 
+**What `test:e2e:local` does**:
+1. Extracts SFDX-AUTH-URL from your local scratch org
+2. Updates the CI backend's Key Vault with your org's credentials
+3. Restarts the CI backend to load new credentials
+4. Waits for backend health check to pass
+5. Runs Playwright e2e tests against the configured backend
+
+**Manual configuration** (if needed):
+```bash
+# Configure CI backend separately
+./scripts/configure-ci-backend-for-local.sh
+
+# Then run tests
+npm run test:e2e
+```
+
 **Available test modes**:
 ```bash
-npm run test:e2e          # Headless (default)
+npm run test:e2e:local    # Configure backend + run (recommended for local)
+npm run test:e2e          # Headless (backend must be configured first)
 npm run test:e2e:headed   # Watch browser execute
 npm run test:e2e:ui       # Interactive mode
 npm run test:e2e:debug    # Debug with Playwright Inspector
 ```
 
+**Important Notes**:
+- 🔄 **Shared Backend**: The CI backend (`docgen-ci`) is shared between local and CI testing
+- ⚠️ **Reconfigure Per Org**: Run `test:e2e:local` each time you create a new scratch org
+- ⏱️ **Backend Restart**: Configuration script waits ~2 minutes for backend to restart
+- 🔐 **Azure Access**: You must have Contributor access to `docgen-ci-rg` resource group
+
 **What's tested**:
-- ✅ Component rendering and visibility
-- ✅ Button state management (enabled/disabled)
-- ✅ Spinner during processing
-- ✅ Success/error toast notifications
-- ✅ Salesforce record creation (Generated_Document__c)
-- ✅ Account page loading
+- ✅ Complete PDF generation flow (LWC → Apex → Backend → Salesforce Files)
+- ✅ Template download from ContentVersion
+- ✅ DOCX template merging with data
+- ✅ PDF conversion via LibreOffice
+- ✅ File upload and ContentDocumentLink creation
+- ✅ Generated_Document__c status tracking
+- ✅ Error handling and toast notifications
+- ✅ **Multi-object support**: Contact, Lead, Opportunity document generation (`e2e/tests/multi-object.spec.ts`)
+- ✅ **Dynamic lookup fields**: Validates Contact__c, Lead__c, Opportunity__c lookup field assignment
+- ✅ **Parent relationship extraction**: Tests multi-parent scenarios (Opportunity → Account)
 
 **See also**:
 - [E2E Testing Guide](./e2e/README.md) - Setup, running tests, troubleshooting

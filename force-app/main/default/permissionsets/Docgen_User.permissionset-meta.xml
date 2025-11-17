@@ -44,6 +44,16 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>Generated_Document__c.Contact__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Generated_Document__c.Lead__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>Generated_Document__c.Template__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -124,4 +134,35 @@
         <field>Docgen_Template__c.PrimaryParent__c</field>
         <readable>true</readable>
     </fieldPermissions>
+
+
+    <!-- External Credential Principal Access -->
+    <externalCredentialPrincipalAccesses>
+        <enabled>true</enabled>
+        <externalCredentialPrincipal>Docgen_AAD_Credential_CI-CI</externalCredentialPrincipal>
+    </externalCredentialPrincipalAccesses>
+    <externalCredentialPrincipalAccesses>
+        <enabled>true</enabled>
+        <externalCredentialPrincipal>Docgen_AAD_Credential-Main</externalCredentialPrincipal>
+    </externalCredentialPrincipalAccesses>
+
+    <!-- Application Visibility -->
+    <applicationVisibilities>
+        <application>Docgen</application>
+        <visible>true</visible>
+    </applicationVisibilities>
+
+    <!-- Custom Tab Visibility -->
+    <tabSettings>
+        <tab>Docgen_Template__c</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    <tabSettings>
+        <tab>Generated_Document__c</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    <tabSettings>
+        <tab>Docgen_Test_Page</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
 </PermissionSet>

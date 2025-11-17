@@ -123,25 +123,17 @@ e2e/
 
 ## Test Cases
 
-### Passing Tests (9)
+### Integration Tests (2)
 
-1. ✅ Renders button on Account record page with correct label
-2. ✅ Button is enabled initially
-3. ✅ Clicking button shows spinner
-4. ✅ Clicking button disables button
-5. ✅ Successful generation shows success toast
-6. ✅ Spinner disappears after completion
-7. ✅ Button re-enables after completion
-8. ✅ Creates Generated_Document__c record with Status=PROCESSING
-9. ✅ Account page loads successfully
+1. ✅ Generates PDF successfully with real backend
+2. ✅ Clicking button twice reuses existing document (idempotency)
 
-### Skipped Tests (3)
-
-These tests are skipped because they require additional setup:
-
-10. ⏭️ Handles missing template gracefully (requires invalid templateId config)
-11. ⏭️ Handles server errors gracefully (requires HttpCalloutMock or test mode)
-12. ⏭️ Clicking button twice reuses existing document (requires backend completion)
+**What's tested**:
+- ✅ End-to-end PDF generation flow
+- ✅ Button interaction (click, spinner, etc.)
+- ✅ Salesforce record creation (Generated_Document__c)
+- ✅ ContentVersion file upload
+- ✅ Idempotency verification
 
 ## Authentication
 
@@ -201,13 +193,10 @@ sf org set default --org docgen-e2e
 **Problem**: Tests fail because backend service isn't running
 
 **Solution**:
-- Current tests assume the Node service is running or mock responses are configured
-- To run UI-only tests, add test mode to `DocgenController.cls`:
-  ```apex
-  @TestVisible
-  private static Boolean isTestMode = false;
-  ```
-- Enable test mode via Anonymous Apex before running tests
+- Tests require a running backend service (Node.js API)
+- Either run the backend locally or use the CI backend
+- See `scripts/provision-ci-backend.sh` for CI backend setup
+- See `scripts/run-e2e-with-real-backend.sh` for local testing with CI backend
 
 ## CI/CD Integration
 

@@ -5,14 +5,18 @@
 public with sharing class DocgenController {
 
     /**
-     * Check if test mode is enabled via Custom Settings
-     * Test mode bypasses HTTP callouts and returns mock success responses
-     * Used by E2E tests to test UI behavior without requiring Node.js backend
+     * Get Named Credential name from Custom Settings
+     * Allows configuring different Named Credentials for different environments
+     * (e.g., 'Docgen_Node_API_CI' for CI tests, 'Docgen_Node_API' for production)
+     * Defaults to 'Docgen_Node_API' if not configured
      */
     @TestVisible
-    private static Boolean isTestMode() {
+    private static String getNamedCredentialName() {
         Docgen_Settings__c settings = Docgen_Settings__c.getInstance();
-        return settings != null && settings.Test_Mode__c == true;
+        if (settings != null && String.isNotBlank(settings.Named_Credential_Name__c)) {
+            return settings.Named_Credential_Name__c;
+        }
+        return 'Docgen_Node_API'; // Default to production Named Credential
     }
 
     /**
@@ -199,15 +203,15 @@ public with sharing class DocgenController {
         doc.RequestedBy__c = UserInfo.getUserId();
         doc.CorrelationId__c = correlationId;
 
-        // Set parent lookups based on record type
-        String sObjectType = recordId.getSObjectType().getDescribe().getName();
-        if (sObjectType == 'Account') {
-            doc.Account__c = recordId;
-        } else if (sObjectType == 'Opportunity') {
-            doc.Opportunity__c = recordId;
-        } else if (sObjectType == 'Case') {
-            doc.Case__c = recordId;
-        }
+        // Set parent lookup dynamically based on object configuration
+        String objectApiName = recordId.getSObjectType().getDescribe().getName();
+
+        // Validate object is supported and get configuration
+        DocgenObjectConfigService.validateObjectSupported(objectApiName);
+        Supported_Object__mdt config = DocgenObjectConfigService.getConfigForObject(objectApiName);
+
+        // Dynamically set the parent lookup field using reflection
+        doc.put(config.Lookup_Field_API_Name__c, recordId);
 
         insert doc;
         return doc;
@@ -215,17 +219,10 @@ public with sharing class DocgenController {
 
     /**
      * Make HTTP callout to Node API via Named Credential
-     * In test mode, returns a mock success response without making actual callout
      */
     private static HTTPResponse callNodeApi(DocgenEnvelopeService.Envelope envelope) {
-        // Test mode: return mock success response
-        if (isTestMode()) {
-            return createMockSuccessResponse(envelope);
-        }
-
-        // Production mode: make actual HTTP callout
         HttpRequest req = new HttpRequest();
-        req.setEndpoint('callout:Docgen_Node_API/generate');
+        req.setEndpoint('callout:' + getNamedCredentialName() + '/generate');
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
         req.setHeader('Accept', 'application/json');
@@ -234,28 +231,6 @@ public with sharing class DocgenController {
 
         Http http = new Http();
         HTTPResponse res = http.send(req);
-
-        return res;
-    }
-
-    /**
-     * Create mock HTTP response for test mode
-     * Returns a mock ContentVersion ID in the expected response format
-     */
-    private static HTTPResponse createMockSuccessResponse(DocgenEnvelopeService.Envelope envelope) {
-        HTTPResponse res = new HTTPResponse();
-        res.setStatusCode(200);
-        res.setStatus('OK');
-
-        // Create mock response body matching expected format from Node API
-        Map<String, Object> responseBody = new Map<String, Object>{
-            'contentVersionId' => '068000000000TESTAA',  // Mock ContentVersion ID
-            'downloadUrl' => '/sfc/servlet.shepherd/version/download/068000000000TESTAA',
-            'correlationId' => generateCorrelationId()
-        };
-
-        res.setBody(JSON.serialize(responseBody));
-        res.setHeader('Content-Type', 'application/json');
 
         return res;
     }
