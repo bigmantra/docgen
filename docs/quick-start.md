@@ -299,8 +299,8 @@ docker run -p 8080:8080 \
 Now that you have Docgen running:
 
 1. **Create Templates** - Learn about template syntax in [Template Authoring Guide](./template-authoring.md)
-2. **Explore Architecture** - Understand the system design in [Architecture Guide](./ARCHITECTURE.md)
-3. **Deploy to Azure** - Follow [Deployment Guide](./DEPLOY.md) for production setup
+2. **Explore Architecture** - Understand the system design in [Architecture Guide](./architecture.md)
+3. **Deploy to Azure** - Follow [Deployment Guide](./deploy.md) for production setup
 4. **Configure Monitoring** - Set up dashboards using [Monitoring Guide](./dashboards.md)
 
 ## Troubleshooting
