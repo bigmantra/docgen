@@ -69,20 +69,33 @@ export async function getScratchOrgInfo(): Promise<ScratchOrgInfo> {
   }
 }
 
+export interface ApexExecutionResult {
+  success: boolean;
+  compiled: boolean;
+  compileProblem?: string;
+  exceptionMessage?: string;
+  exceptionStackTrace?: string;
+  logs?: string;
+}
+
 /**
  * Execute Anonymous Apex code in the scratch org
  * Useful for setting up test state or enabling test modes
  */
-export async function executeAnonymousApex(apexCode: string): Promise<void> {
+export async function executeAnonymousApex(apexCode: string): Promise<ApexExecutionResult> {
   try {
     // Write Apex code to temporary file
     const tempFile = '/tmp/apex-temp.apex';
     const fs = require('fs');
     fs.writeFileSync(tempFile, apexCode);
 
+    // In CI, use SF_USERNAME env var if available to explicitly target the org
+    const targetOrg = process.env.SF_USERNAME;
+    const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
+
     // Execute via CLI (disable colors for JSON output)
-    const { stdout, stderr } = await execAsync(
-      `sf apex run --file ${tempFile} --json`,
+    const { stdout } = await execAsync(
+      `sf apex run --file ${tempFile}${targetOrgFlag} --json`,
       { env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' } }
     );
 
@@ -90,17 +103,61 @@ export async function executeAnonymousApex(apexCode: string): Promise<void> {
     const cleanStdout = stdout.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
     const result = JSON.parse(cleanStdout);
 
-    if (!result.result.success) {
-      throw new Error(
-        `Apex execution failed: ${result.result.compileProblem || result.result.exceptionMessage}`
-      );
-    }
-
     // Clean up
     fs.unlinkSync(tempFile);
+
+    return result.result;
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Failed to execute Anonymous Apex: ${error.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Create a record via Salesforce REST API (for binary data like ContentVersion)
+ */
+async function createRecordViaRestAPI(
+  objectType: string,
+  fields: Record<string, any>
+): Promise<string> {
+  const orgInfo = await getScratchOrgInfo();
+
+  // Write JSON to temp file
+  const fs = require('fs');
+  const tempFile = `/tmp/sf-record-rest-${Date.now()}.json`;
+  fs.writeFileSync(tempFile, JSON.stringify(fields));
+
+  try {
+    const url = `${orgInfo.instanceUrl}/services/data/v65.0/sobjects/${objectType}`;
+
+    const command = `curl -X POST "${url}" \\
+      -H "Authorization: Bearer ${orgInfo.accessToken}" \\
+      -H "Content-Type: application/json" \\
+      -d @${tempFile}`;
+
+    const { stdout } = await execAsync(command, {
+      maxBuffer: 10 * 1024 * 1024 // 10MB buffer for large responses
+    });
+
+    const result = JSON.parse(stdout);
+
+    // Clean up temp file
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+
+    if (!result.success || !result.id) {
+      throw new Error(`REST API creation failed: ${JSON.stringify(result)}`);
+    }
+
+    return result.id;
+  } catch (error) {
+    // Clean up temp file on error
+    const fs = require('fs');
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
     }
     throw error;
   }
@@ -157,42 +214,52 @@ export async function createRecord(
   fields: Record<string, any>
 ): Promise<string> {
   try {
-    // Build field values string
-    const fieldValues = Object.entries(fields)
+    // For ContentVersion and other objects with binary data, use REST API via curl
+    if (objectType === 'ContentVersion' || Object.keys(fields).some(k => k === 'VersionData')) {
+      return await createRecordViaRestAPI(objectType, fields);
+    }
+
+    // Use Anonymous Apex for record creation to handle complex JSON fields
+    // Build field assignments for Apex
+    const fieldAssignments = Object.entries(fields)
       .map(([key, value]) => {
-        // Escape single quotes in string values
-        const escapedValue =
-          typeof value === 'string' ? value.replace(/'/g, "\\'") : value;
-        return `${key}='${escapedValue}'`;
+        if (typeof value === 'string') {
+          // Escape single quotes and backslashes in string values
+          const escapedValue = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          return `rec.${key} = '${escapedValue}';`;
+        } else if (typeof value === 'number') {
+          return `rec.${key} = ${value};`;
+        } else if (typeof value === 'boolean') {
+          return `rec.${key} = ${value};`;
+        } else if (value === null) {
+          return `rec.${key} = null;`;
+        }
+        return '';
       })
-      .join(' ');
+      .filter(Boolean)
+      .join('\n');
 
-    // In CI, use SF_USERNAME env var if available to explicitly target the org
-    const targetOrg = process.env.SF_USERNAME;
-    const targetOrgFlag = targetOrg ? ` --target-org ${targetOrg}` : '';
+    const apexCode = `
+${objectType} rec = new ${objectType}();
+${fieldAssignments}
+insert rec;
+System.debug('RECORD_ID:' + rec.Id);
+`;
 
-    // Log command for debugging in CI
-    const command = `sf data create record --sobject ${objectType} --values "${fieldValues}"${targetOrgFlag} --json`;
-    console.log('Executing:', command);
+    console.log('Creating record via Anonymous Apex...');
+    const result = await executeAnonymousApex(apexCode);
 
-    const { stdout, stderr } = await execAsync(command, {
-      env: { ...process.env, SF_FORMAT_JSON: 'true', SF_DISABLE_COLORS: 'true' }
-    });
-
-    // Log stderr if present for debugging
-    if (stderr) {
-      console.error('SF CLI stderr (create):', stderr);
+    if (!result.success) {
+      throw new Error(`Apex execution failed: ${result.compileProblem || result.exceptionMessage}`);
     }
 
-    const cleanStdout = stdout.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
-    const result = JSON.parse(cleanStdout);
-
-    if (result.status !== 0) {
-      console.error('SF CLI error response:', JSON.stringify(result, null, 2));
-      throw new Error(`Record creation failed: ${result.message}`);
+    // Extract record ID from debug logs
+    const recordIdMatch = result.logs?.match(/RECORD_ID:([a-zA-Z0-9]{15,18})/);
+    if (!recordIdMatch) {
+      throw new Error('Could not extract record ID from Apex logs');
     }
 
-    return result.result.id;
+    return recordIdMatch[1];
   } catch (error) {
     if (error instanceof Error) {
       // SF CLI often returns error details in stdout even when command fails
@@ -356,4 +423,47 @@ export async function waitForSalesforceRecord(
     `3. Network latency is higher than anticipated in CI\n` +
     `Consider increasing maxAttempts or delayMs for CI environments.`
   );
+}
+
+/**
+ * ScratchOrgHelper class
+ * Provides a higher-level interface for test operations
+ */
+export class ScratchOrgHelper {
+  constructor(
+    _page: any, // Playwright Page (unused but kept for interface compatibility)
+    public scratchOrgConfig: ScratchOrgInfo
+  ) {}
+
+  async query<T = any>(soql: string): Promise<T[]> {
+    return await querySalesforce(soql);
+  }
+
+  async createRecord(objectType: string, fields: Record<string, any>): Promise<{ id: string }> {
+    const id = await createRecord(objectType, fields);
+    return { id };
+  }
+
+  async updateRecord(objectType: string, recordId: string, fields: Record<string, any>): Promise<void> {
+    await updateRecord(objectType, recordId, fields);
+  }
+
+  async deleteRecords(objectType: string, recordIds: string[]): Promise<void> {
+    await deleteRecords(objectType, recordIds);
+  }
+
+  async executeAnonymousApex(apexCode: string): Promise<ApexExecutionResult> {
+    return await executeAnonymousApex(apexCode);
+  }
+
+  async waitForRecord(
+    queryFn: () => Promise<any[]>,
+    options?: {
+      maxAttempts?: number;
+      delayMs?: number;
+      description?: string;
+    }
+  ): Promise<any[]> {
+    return await waitForSalesforceRecord(queryFn, options);
+  }
 }
