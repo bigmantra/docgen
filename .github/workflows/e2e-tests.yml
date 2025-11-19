@@ -10,13 +10,17 @@ concurrency:
   cancel-in-progress: true  
 
 jobs:
-  create-scratch-org:
-    name: Create Scratch Org
+  deploy-ci-backend:
+    name: Deploy CI Backend
+    uses: ./.github/workflows/deploy-ci-backend.yml
+    secrets: inherit
+
+  e2e-tests:
+    name: E2E Tests with Scratch Org
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    needs: deploy-ci-backend
+    timeout-minutes: 45
     environment: ci
-    outputs:
-      org_alias: ${{ steps.create-org.outputs.org_alias }}
 
     steps:
       - name: Checkout code
@@ -132,73 +136,26 @@ jobs:
         run: |
           echo "🔄 Restarting Container App to pick up scratch org credentials..."
 
-          # Check if container app exists first
-          if az containerapp show --name docgen-ci --resource-group docgen-ci-rg &>/dev/null; then
-            az containerapp revision restart \
+          # Container app should exist now (deployed by deploy-ci-backend job)
+          az containerapp revision restart \
+            --name docgen-ci \
+            --resource-group docgen-ci-rg \
+            --revision $(az containerapp revision list \
               --name docgen-ci \
               --resource-group docgen-ci-rg \
-              --revision $(az containerapp revision list \
-                --name docgen-ci \
-                --resource-group docgen-ci-rg \
-                --query '[0].name' -o tsv)
+              --query '[0].name' -o tsv)
 
-            echo "✅ Container App restarted"
-            echo "⏳ Waiting 30 seconds for secret to propagate..."
-            sleep 30
-          else
-            echo "ℹ️  Container App doesn't exist yet (will be created by deploy-ci-backend job)"
-          fi
-
-  deploy-ci-backend:
-    name: Deploy CI Backend
-    needs: create-scratch-org
-    uses: ./.github/workflows/deploy-ci-backend.yml
-    secrets: inherit
-
-  e2e-tests:
-    name: Playwright E2E Tests with Real Backend
-    runs-on: ubuntu-latest
-    needs: [create-scratch-org, deploy-ci-backend]
-    timeout-minutes: 30
-    environment: ci
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Salesforce CLI
-        run: npm install -g @salesforce/cli
+          echo "✅ Container App restarted"
+          echo "⏳ Waiting 30 seconds for secret to propagate..."
+          sleep 30
 
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
-      - name: Authenticate Dev Hub
-        env:
-          SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL }}
-        run: |
-          echo "$SFDX_AUTH_URL" > auth.txt
-          sf org login sfdx-url --sfdx-url-file auth.txt --alias devhub --set-default-dev-hub
-          rm auth.txt
-
-      - name: Set scratch org as default
-        run: |
-          echo "Setting scratch org as default: ${{ needs.create-scratch-org.outputs.org_alias }}"
-          sf config set target-org=${{ needs.create-scratch-org.outputs.org_alias }}
-          echo "✅ Using scratch org from create-scratch-org job"
-
       - name: Get org credentials
         id: org-info
         run: |
-          # Get org info
+          # Get org info (org is already authenticated and set as default)
           sf org display --json > org-info.json
 
           # Extract credentials and set as environment variables
@@ -280,8 +237,9 @@ jobs:
       - name: Delete scratch org
         if: always()
         run: |
+          ORG_ALIAS="${{ steps.create-org.outputs.org_alias }}"
           sf org delete scratch \
-            --target-org ${{ needs.create-scratch-org.outputs.org_alias }} \
+            --target-org ${ORG_ALIAS} \
             --no-prompt || echo "Org already deleted or not found"
 
       - name: Comment PR with test results
