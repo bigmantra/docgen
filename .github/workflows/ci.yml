@@ -120,12 +120,6 @@ jobs:
           SF_PRIVATE_KEY: ${{ secrets.SF_PRIVATE_KEY }}
         continue-on-error: true
 
-      - name: Cleanup scratch org
-        if: always() && steps.setup-scratch-org.outputs.scratch_org_auth_url != ''
-        run: |
-          sf org delete scratch --target-org ci-test-org --no-prompt || true
-        continue-on-error: true
-
       - name: Run tests with coverage
         run: |
           # Set scratch org auth URL if available
@@ -141,6 +135,12 @@ jobs:
           SF_USERNAME: ${{ secrets.SF_USERNAME }}
           SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
           SF_PRIVATE_KEY: ${{ secrets.SF_PRIVATE_KEY }}
+
+      - name: Cleanup scratch org
+        if: always() && steps.setup-scratch-org.outputs.scratch_org_auth_url != ''
+        run: |
+          sf org delete scratch --target-org ci-test-org --no-prompt || true
+        continue-on-error: true
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
