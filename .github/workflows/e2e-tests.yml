@@ -112,7 +112,13 @@ jobs:
           fi
 
           echo "✅ Extracted SFDX Auth URL from scratch org"
-          echo "sfdx_auth_url=${SFDX_AUTH_URL}" >> $GITHUB_OUTPUT
+
+          # Use delimiter syntax for outputs with special characters
+          {
+            echo "sfdx_auth_url<<EOF"
+            echo "$SFDX_AUTH_URL"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
   deploy-ci-backend:
     name: Deploy CI Backend
