@@ -46,7 +46,9 @@ Generate it with: sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   beforeEach(async () => {
