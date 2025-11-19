@@ -89,6 +89,10 @@ jobs:
           echo "📤 Deploying metadata to scratch org..."
           sf project deploy start --source-dir force-app --wait 10
 
+          # Assign permission set to user
+          echo "🔐 Assigning Docgen_User permission set..."
+          sf org assign permset --name Docgen_User --target-org ci-test-org
+
           echo "✅ Scratch org created and configured successfully"
         env:
           DEVHUB_SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL }}
